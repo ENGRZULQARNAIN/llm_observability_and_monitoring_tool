@@ -17,7 +17,7 @@ from .models import Users
 from .schemas import (Login, PasswordResetConfirm, PasswordResetRequest,
                       TotalAndAllUsersResponse, User)
 
-router = APIRouter(tags=["Users"])
+router = APIRouter(tags=["AUTHENTICATIONS"])
 
 ################# REGISTER #################################
 
