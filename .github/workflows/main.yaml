@@ -1,0 +1,51 @@
+name: OBAN AI
+
+env:
+  "S3_BUCKET_NAME": "elasticbeanstalk-us-east-1-637423172982"
+  "EBS_APPLICATION_NAME": "fyp_observabillity"
+  "EBS_ENVIRONMENT_NAME": "Fypobservabillity-env"
+  "AWS_REGION": "us-east-1"
+  "DEPLOY_PACKAGE_NAME": "OBSERVABILITY_TOOL_AI-app-${{github.sha}}.zip"
+
+on:
+  push:
+    branches: ["stage"]
+  pull_request:
+    branches: ["stage"]
+
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Clone the repository
+        uses: actions/checkout@v3
+
+      - name: Zip the repository
+        run: zip -r ${{env.DEPLOY_PACKAGE_NAME}} ./ -x *.git*
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{secrets.ACCESS_KEY_ID}}
+          aws-secret-access-key: ${{secrets.SECRET_ACCESS_KEY}}
+          aws-region: ${{env.AWS_REGION}}
+
+      - name: Upload Deployment to S3 Bucket
+        run: aws s3 cp ${{env.DEPLOY_PACKAGE_NAME}} s3://${{env.S3_BUCKET_NAME}}/
+
+      - name: Create new Elastic Beanstalk Application Version
+        run: |
+          aws elasticbeanstalk create-application-version \
+          --application-name ${{env.EBS_APPLICATION_NAME}} \
+          --source-bundle S3Bucket="${{env.S3_BUCKET_NAME}}",S3Key="${{env.DEPLOY_PACKAGE_NAME}}" \
+          --version-label "ver-${{ github.sha }}" \
+          --description "commit-sha-${{ github.sha }}"
+
+      - name: Deploy new ElasticBeanstalk Application Version
+        run: aws elasticbeanstalk update-environment --environment-name ${{env.EBS_ENVIRONMENT_NAME}} --version-label "ver-${{ github.sha }}"
+
+      - name: Print Success Message on Completion
+        run: echo "CI/CD pipeline ran successfully"
