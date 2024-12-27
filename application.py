@@ -20,5 +20,5 @@ templates = Jinja2Templates(directory=str(templates_path))
 
 @application.get("/")
 async def read_items():
-    return {"version": "v0.0.1"}
+    return {"version": "v0.0.2"}
 
