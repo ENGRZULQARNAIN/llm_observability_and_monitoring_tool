@@ -1,10 +1,30 @@
-from fastapi import FastAPI
-from fastapi.templating import Jinja2Templates
-from fastapi.middleware.cors import CORSMiddleware
+import os
+import sys
 from pathlib import Path
 
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.templating import Jinja2Templates
 
-application = FastAPI()
+# Get the absolute path to your app directory
+BASE_DIR = Path(__file__).resolve().parent
+
+# Add the app directory to Python path
+sys.path.append(str(BASE_DIR))
+from core.database import create_tables
+from modules.Auth import auth_routers
+print("Python path:", sys.path)
+print("Current working directory:", os.getcwd())
+print("Base directory:", BASE_DIR)
+
+try:
+   
+    print("Successfully imported auth_routers")
+except ImportError as e:
+    print("Failed to import auth_routers:", str(e))
+
+application = FastAPI(title="OBAM AI FYP")
+
 application.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -13,12 +33,12 @@ application.add_middleware(
     allow_headers=["*"],
 )
 
-templates_path = Path(__file__).parent / "templates"
-templates = Jinja2Templates(directory=str(templates_path))
-
-
 
 @application.get("/")
 async def read_items():
-    return {"version": "v0.0.2"}
+    return {"message":"OBAM AI version v0.0.3"}
 
+application.include_router(auth_routers.router)
+
+# if __name__ == "__main__":
+#     create_tables()
