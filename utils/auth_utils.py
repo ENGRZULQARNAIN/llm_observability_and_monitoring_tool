@@ -16,11 +16,11 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 BASE_URL = settings.BASE_URL
 def send_verifiaction_code_on_email(receiver,good_name,verification_token):
 
-    port = 465 # For starttls
-    smtp_server = "smtp.hostinger.com,"
+    port = 465 # For ssl
+    smtp_server = "smtp.hostinger.com"
     sender_email = "support@sarihorganics.com"
     receiver_email = receiver
-    subject = "Password Reset Link (OBAM AI)"
+    subject = "ACCOUNT VERIFICATION LINK (OBAM AI)"
     password = "Support@4791"
 
     body="""<!DOCTYPE html>
@@ -48,7 +48,7 @@ def send_verifiaction_code_on_email(receiver,good_name,verification_token):
             margin: 0 auto;
             padding: 20px;
             border: 1px solid white;
-            background-color: #b3daff;
+            background-color: #EFF3EA;
             border-radius: 5px;
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
           }
@@ -71,13 +71,13 @@ def send_verifiaction_code_on_email(receiver,good_name,verification_token):
           }
 
           .logo {
-            width: 100px;
-            border:1px solid white;
+            width: 150px;
+            border:1px solid #8a3aff;
           }
           .verify-button
           {
           text-decoration:none;
-          background-color:#009933;
+          background-color:#8a3aff;
           border-radius:5px;
           padding:10px;
           border: none;
@@ -87,7 +87,7 @@ def send_verifiaction_code_on_email(receiver,good_name,verification_token):
       </head>
       <body>
         <div class="container">
-    <img src="https://i.ibb.co/2k2YhLC/image-.png" alt="our logo" border="0" class="logo" />
+    <img src="https://sarihorganics.com/wp-content/uploads/2024/12/Purple_and_White_Modern_AI_Technology_Logo-removebg.png" alt="our logo" border="0" class="logo" />
     """
     body += f'<p>Dear {good_name},</p>' \
             f'<h1><strong>Welcome to the OBAM AI!</strong></h1>' \

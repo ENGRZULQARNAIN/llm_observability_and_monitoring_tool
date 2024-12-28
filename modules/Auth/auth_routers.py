@@ -44,8 +44,8 @@ def register(request: User, db: Session = Depends(get_db)):
         db.commit()
         db.refresh(db_entry)
 
-        # send_verifiaction_code_on_email(
-        #     db_entry.email, db_entry.name, db_entry.verification_token)
+        send_verifiaction_code_on_email(
+            db_entry.email, db_entry.name, db_entry.verification_token)
 
         return {
             "status": "ok",
