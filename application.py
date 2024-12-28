@@ -1,7 +1,7 @@
 import os
 import sys
 from pathlib import Path
-
+from modules import services
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -30,9 +30,12 @@ application.add_middleware(
 
 @application.get("/")
 async def read_items():
-    return {"message":"OBAM AI version v0.0.5"}
+    return {"message":"OBAM AI version v0.0.6"}
+
 
 application.include_router(auth_routers.router)
+
+application.include_router(services.router)
 
 # if __name__ == "__main__":
 #     create_tables()
