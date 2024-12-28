@@ -35,4 +35,6 @@ class TotalAndAllUsersResponse(BaseModel):
 class TokensCalc(BaseModel):
     url:str
 
-
+class AccessToken(BaseModel):
+    access_token:str
+    
