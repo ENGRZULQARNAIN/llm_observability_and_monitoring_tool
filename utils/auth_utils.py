@@ -16,6 +16,17 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 BASE_URL = settings.BASE_URL
 def send_verifiaction_code_on_email(receiver,good_name,verification_token):
 
+    """
+    Sends a verification email to a user with a verification token.
+
+    Args:
+        receiver (str): The email address of the user to send the verification email to.
+        good_name (str): The name of the user (e.g. "John Doe")
+        verification_token (str): The verification token to include in the email.
+
+    Returns:
+        None
+    """
     port = 465 # For ssl
     smtp_server = "smtp.hostinger.com"
     sender_email = "support@sarihorganics.com"
@@ -131,6 +142,17 @@ def send_verifiaction_code_on_email(receiver,good_name,verification_token):
 ########################## for got ###################################################
 def send_reset_code_on_email(receiver,good_name,reset_token):
 
+    """
+    Sends a password reset email to a user with a reset token.
+
+    Args:
+        receiver (str): The email address of the user to send the password reset email to.
+        good_name (str): The name of the user (e.g. "John Doe")
+        reset_token (str): The reset token to include in the email.
+
+    Returns:
+        None
+    """
     port = 465 # For starttls
     smtp_server = "smtp.hostinger.com,"
     sender_email = "support@sarihorganics.com"
@@ -249,30 +271,78 @@ def send_reset_code_on_email(receiver,good_name,reset_token):
 
 
 def generate_verification_token():
+    """
+    Generates a 16 character long verification token.
+
+    Returns:
+        str: A 16 character long verification token.
+    """
     return secrets.token_urlsafe(16)
 
 ############################################################################
 def generate_verification_code():
     # Generate a random 6-digit hexadecimal code
+    """
+    Generates a random 6-digit hexadecimal verification code.
+
+    Returns:
+        str: A 6-digit hexadecimal code in uppercase.
+    """
+
     verification_code = secrets.token_hex(3).upper()
     return verification_code
 
 def generate_unique_id_for_user(db: Session):
+    """
+    Generates a unique user ID by creating a short UUID and ensuring it does not
+    already exist in the database.
+
+    Args:
+        db (Session): The database session used to query existing user IDs.
+
+    Returns:
+        str: A unique user ID that is not already present in the database.
+    """
+
     unique_id = str(shortuuid.uuid())
     while db.query(Users).filter(Users.user_id == unique_id).first():
         unique_id = str(shortuuid.uuid())
     return unique_id
 
 def get_unique_id():
+    """
+    Generates a unique, short, URL-safe UUID.
+
+    Returns:
+        str: A short, URL-safe UUID.
+    """
     return str(shortuuid.uuid())
 
 
 class Hasher():
     @staticmethod
     def verify_password(plain_password, hashed_password):
+        """Verifies a password against a hashed password.
+
+        Args:
+            plain_password (str): The password to verify.
+            hashed_password (str): The hashed password to verify against.
+
+        Returns:
+            bool: True if the password is valid, False otherwise.
+        """
         return pwd_context.verify(plain_password, hashed_password)
 
     @staticmethod
     def get_password_hash(password):
+        """
+        Generates a hashed version of the given password.
+
+        Args:
+            password (str): The password to hash.
+
+        Returns:
+            str: The hashed password.
+        """
         return pwd_context.hash(password)
     
