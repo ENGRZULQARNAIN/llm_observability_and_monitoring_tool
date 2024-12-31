@@ -8,10 +8,13 @@ from core.config import Settings
 import shortuuid
 from sqlalchemy.orm import Session
 from modules.Auth.models import Users
-
+import os
+from dotenv import load_dotenv
+load_dotenv()
+EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 settings = Settings()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-# from core.config import Settings
+
 
 BASE_URL = settings.BASE_URL
 def send_verifiaction_code_on_email(receiver,good_name,verification_token):
@@ -32,7 +35,7 @@ def send_verifiaction_code_on_email(receiver,good_name,verification_token):
     sender_email = "support@sarihorganics.com"
     receiver_email = receiver
     subject = "ACCOUNT VERIFICATION LINK (OBAM AI)"
-    password = "Support@4791"
+    password = EMAIL_PASSWORD
 
     body="""<!DOCTYPE html>
     <html>
@@ -158,7 +161,7 @@ def send_reset_code_on_email(receiver,good_name,reset_token):
     sender_email = "support@sarihorganics.com"
     receiver_email = receiver
     subject = "Password Reset Link (OBAM AI)"
-    password = "Support@4791"
+    password = EMAIL_PASSWORD
 
     body="""<!DOCTYPE html>
     <html>
@@ -185,7 +188,7 @@ def send_reset_code_on_email(receiver,good_name,reset_token):
             margin: 0 auto;
             padding: 20px;
             border: 1px solid white;
-            background-color: #b3daff;
+            background-color: #EFF3EA;
             border-radius: 5px;
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
           }
@@ -208,13 +211,12 @@ def send_reset_code_on_email(receiver,good_name,reset_token):
           }
 
           .logo {
-            width: 100px;
-            border:1px solid white;
+            width: 150px;
+            border:1px solid #8a3aff;
           }
           .verify-button
           {
-          text-decoration:none;
-          background-color:#009933;
+          background-color:#8a3aff;
           border-radius:5px;
           padding:10px;
           border: none;
@@ -224,7 +226,7 @@ def send_reset_code_on_email(receiver,good_name,reset_token):
       </head>
       <body>
         <div class="container">
-    <img src="https://i.ibb.co/2k2YhLC/image-2-r.png" alt="OBAM-Logo" border="0" class="logo" />
+    <img src="https://sarihorganics.com/wp-content/uploads/2024/12/Purple_and_White_Modern_AI_Technology_Logo-removebg.png" alt="OBAM-Logo" border="0" class="logo" />
     """
     body += f'<p>Dear {good_name},</p>' \
     f'<h1><strong>Password Reset Link OBAM AI!</strong></h1>' \
@@ -252,11 +254,8 @@ def send_reset_code_on_email(receiver,good_name,reset_token):
 
     # Create a secure SSL context
     context = ssl.create_default_context()
-
     # Try to log in to server and send email
     try:
-        # context = ssl.create_default_context()
-
         server = smtplib.SMTP_SSL(smtp_server, port,context)
         # server.starttls(context=context)  # Secure the connection
         server.login(sender_email, password)
