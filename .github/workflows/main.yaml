@@ -9,9 +9,9 @@ env:
 
 on:
   push:
-    branches: ["stage"]
+    branches: ["main"]
   pull_request:
-    branches: ["stage"]
+    branches: ["main"]
 
   workflow_dispatch:
 
