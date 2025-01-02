@@ -20,7 +20,7 @@ router = APIRouter(tags=["AUTHENTICATIONS"])
 
 
 @router.post("/register")
-def register(request: User, db: Session = Depends(get_db), auth_manager: AuthManager = Depends(get_auth_manager)):
+async def register(request: User, db: Session = Depends(get_db), auth_manager: AuthManager = Depends(get_auth_manager)):
     """
     Register a new user account.
 
@@ -79,7 +79,7 @@ def register(request: User, db: Session = Depends(get_db), auth_manager: AuthMan
 
 
 @router.post("/login/")
-def login(credentials: Login, auth_manager: AuthManager = Depends(get_auth_manager)):
+async def login(credentials: Login, auth_manager: AuthManager = Depends(get_auth_manager)):
     """
     Verify user credentials and return user data if authenticated.
 
@@ -98,8 +98,10 @@ def login(credentials: Login, auth_manager: AuthManager = Depends(get_auth_manag
                 raise HTTPException(
                     status_code=401, detail="Invalid Credentials.")
             user_dict = {"user_id": user.user_id,
-                            "name": user.name, "email": user.email}
-            db.close()
+                            "name": user.name, 
+                            "email": user.email,
+                            "verification_token":user.verification_token
+                            }
             return {"status": "ok", "message": "Account has been Authenticated.", "data": user_dict}
             # else:
             #     # send_verifiaction_code_on_email(
@@ -110,8 +112,9 @@ def login(credentials: Login, auth_manager: AuthManager = Depends(get_auth_manag
                     "message": "User not Found.",
                     "data": None}
     except Exception as e:
-        db.close()
         return {"status": "error", "message": str(e), "data": None}
+    finally:
+        db.close()
 
 # ################# VERIFICATION #################################
 
@@ -136,22 +139,22 @@ def verify_account(token: str):
             if user.isVerified:
                 db.close()
                 # Redirect to the given page with a message
-                return RedirectResponse(url="")
+                return RedirectResponse(url="https://web-app-llm-observability-bre1.vercel.app/login")
                 # return {"status": "ok", "message": "Account is already Verified.", "data": None}
             else:
                 user.isVerified = True
                 db.commit()
-                db.close()
                 # Redirect to the given page with a message
-                return RedirectResponse(url="https://build-for-ai-dkvc.vercel.app/aen+verified+login+to+access+Dashboard.")
+                return RedirectResponse(url="https://web-app-llm-observability-bre1.vercel.app/login")
                 # return {"status": "ok", "message": "Account Verified successfully.", "data": None}
         else:
             return {"status": "error",
                     "message": "User not Found.",
                     "data": None}
     except Exception as e:
-        db.close()
         return {"status": "error", "message": str(e), "data": None}
+    finally:
+        db.close()
 
 ################# RESEND VERIFICATION TOKEN #################################
 
@@ -180,7 +183,6 @@ def resendVerificationToken(email: str, auth_manager: AuthManager = Depends(get_
         user = db.query(Users).filter(Users.email == email).first()
         if user:
             if user.isVerified:
-                db.close()
                 return {"status": "ok", "message": "Account is already Verified.", "data": None}
             else:
                 auth_manager.send_verification_email(
@@ -191,14 +193,15 @@ def resendVerificationToken(email: str, auth_manager: AuthManager = Depends(get_
                     "message": "Provided Email Address does not points to any Registered account.",
                     "data": None}
     except Exception as e:
-        db.close()
         return {"status": "error", "message": str(e), "data": None}
+    finally:
+        db.close()
 
 
 ################# FORGOT PASSWORD REQUEST #################################
 
 @router.post("/forgot-password/")
-def forgot_password(request: PasswordResetRequest, db: Session = Depends(get_db), auth_manager: AuthManager = Depends(get_auth_manager)):
+async def forgot_password(request: PasswordResetRequest, db: Session = Depends(get_db), auth_manager: AuthManager = Depends(get_auth_manager)):
     """
     Handle forgot password requests by generating a reset code and sending it to the user's email.
 
@@ -216,25 +219,30 @@ def forgot_password(request: PasswordResetRequest, db: Session = Depends(get_db)
     a verification code is generated and stored as the user's verification token. The reset code is then
     sent to the user's email address, allowing them to reset their password.
     """
+    try:
 
-    user = db.query(Users).filter(Users.email == request.email).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        user = db.query(Users).filter(Users.email == request.email).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
 
-    reset_code = auth_manager.generate_verification_code()
-    user.verification_token = reset_code
-    db.commit()
+        reset_code = auth_manager.generate_verification_code()
+        user.verification_token = reset_code
+        db.commit()
 
-    # reset_url = f"{BASE_URL}/reset-password/?token={reset_token}"  # Update with your domain
-    auth_manager.send_reset_password_email(user.email, user.name, reset_code)
+        # reset_url = f"{BASE_URL}/reset-password/?token={reset_token}"  # Update with your domain
+        auth_manager.send_reset_password_email(user.email, user.name, reset_code)
 
-    return {"status": "ok", "message": "Password reset instructions have been sent to your email"}
+        return {"status": "ok", "message": "Password reset instructions have been sent to your email"}
+    except Exception as e:
+        return {"status": "error", "message": str(e), "data": None}
+    finally:
+        db.close()
 
 
 ################# RESET PASSWORD CONFIRM #################################
 
 @router.post("/reset-password/")
-def reset_password(token: str, new_password: PasswordResetConfirm, db: Session = Depends(get_db), auth_manager: AuthManager = Depends(get_auth_manager)):
+async def reset_password(token: str, new_password: PasswordResetConfirm, db: Session = Depends(get_db), auth_manager: AuthManager = Depends(get_auth_manager)):
     """
     Handle password reset requests by verifying the reset token and updating the user's password.
 
@@ -265,18 +273,6 @@ def reset_password(token: str, new_password: PasswordResetConfirm, db: Session =
 
     return {"status": "ok", "message": "Password has been reset successfully"}
 
-
-@router.get("/total-and-all-users/")
-async def get_total_and_all_users(db: Session = Depends(get_db)):
-    """
-    Get total number of users and all users from the database.
-
-    Returns:
-    dict: A dictionary with the total number of users and a list of all users.
-    """
-    all_users = db.query(Users).all()
-    total_users = db.query(func.count(Users.user_id)).scalar()
-    return {"total_users": total_users, "all_users": all_users}
 
 
 @router.get("/total-and-all-users/", response_model=TotalAndAllUsersResponse)
@@ -324,5 +320,7 @@ def update_user_name(user_id: str, new_name: str, db: Session = Depends(get_db))
         db.rollback()
         raise HTTPException(
             status_code=500, detail="An unexpected error occurred")
+    finally:
+        db.close()
 
 

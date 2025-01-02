@@ -8,7 +8,9 @@ from sqlalchemy.orm import Session
 import shortuuid
 from core.config import Settings
 from modules.Auth.models import Users
-
+from dotenv import load_dotenv
+import os
+load_dotenv()
 import bcrypt
 
 class AuthManager:
@@ -20,7 +22,7 @@ class AuthManager:
         self.smtp_server = "smtp.hostinger.com"
         self.smtp_port = 465
         self.sender_email = "support@sarihorganics.com"
-        self.smtp_password = "Support@4791"
+        self.smtp_password = os.getenv("EMAIL_PASSWORD")
 
     def verify_password(self, plain_password: str, hashed_password: str) -> bool:
         return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password)
