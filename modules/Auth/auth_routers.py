@@ -5,13 +5,10 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import func
 
-
 from core.database import SessionLocal, get_db
-from utils.auth_utils import (Hasher, generate_unique_id_for_user,
-                              generate_verification_code,
-                              generate_verification_token,
-                              send_reset_code_on_email,
-                              send_verifiaction_code_on_email)
+from utils.auth_utils import AuthManager
+
+from .dependencies import get_auth_manager
 
 from .models import Users
 from .schemas import (Login, PasswordResetConfirm, PasswordResetRequest,
@@ -22,8 +19,8 @@ router = APIRouter(tags=["AUTHENTICATIONS"])
 ################# REGISTER #################################
 
 
-@router.post("/register/")
-def register(request: User, db: Session = Depends(get_db)):
+@router.post("/register")
+def register(request: User, db: Session = Depends(get_db), auth_manager: AuthManager = Depends(get_auth_manager)):
     """
     Register a new user account.
 
@@ -50,20 +47,20 @@ def register(request: User, db: Session = Depends(get_db)):
             raise HTTPException(
                 status_code=400, detail="Email already registered. Please use another email address or login with the existing email address.")
 
-        hashed_password = Hasher.get_password_hash(request.password)
+        hashed_password = auth_manager.get_password_hash(request.password)
         db_entry = Users(
-            user_id=generate_unique_id_for_user(db),
+            user_id=auth_manager.generate_unique_user_id(db),
             name=request.name,
             email=request.email,
             password=hashed_password,
-            verification_token=generate_verification_token()
+            verification_token=auth_manager.generate_verification_token()
         )
 
         db.add(db_entry)
         db.commit()
         db.refresh(db_entry)
 
-        send_verifiaction_code_on_email(
+        auth_manager.send_verification_email(
             db_entry.email, db_entry.name, db_entry.verification_token)
 
         return {
@@ -82,7 +79,7 @@ def register(request: User, db: Session = Depends(get_db)):
 
 
 @router.post("/login/")
-def login(credentials: Login):
+def login(credentials: Login, auth_manager: AuthManager = Depends(get_auth_manager)):
     """
     Verify user credentials and return user data if authenticated.
 
@@ -97,7 +94,7 @@ def login(credentials: Login):
         user = db.query(Users).filter(Users.email == credentials.email).first()
         if user:
             
-            if not user or not Hasher.verify_password(credentials.password, user.password):
+            if not auth_manager.verify_password(credentials.password, user.password):
                 raise HTTPException(
                     status_code=401, detail="Invalid Credentials.")
             user_dict = {"user_id": user.user_id,
@@ -160,7 +157,7 @@ def verify_account(token: str):
 
 
 @router.get("/resendVerificationToken/")
-def resendVerificationToken(email: str):
+def resendVerificationToken(email: str, auth_manager: AuthManager = Depends(get_auth_manager)):
     """
     Resend the account verification token to the user's email address.
 
@@ -186,7 +183,7 @@ def resendVerificationToken(email: str):
                 db.close()
                 return {"status": "ok", "message": "Account is already Verified.", "data": None}
             else:
-                send_verifiaction_code_on_email(
+                auth_manager.send_verification_email(
                     user.email, user.name, user.verification_token)
                 return {"status": "ok", "message": "Verification Link has been Resent to your Email Address.", "data": None}
         else:
@@ -201,7 +198,7 @@ def resendVerificationToken(email: str):
 ################# FORGOT PASSWORD REQUEST #################################
 
 @router.post("/forgot-password/")
-def forgot_password(request: PasswordResetRequest, db: Session = Depends(get_db)):
+def forgot_password(request: PasswordResetRequest, db: Session = Depends(get_db), auth_manager: AuthManager = Depends(get_auth_manager)):
     """
     Handle forgot password requests by generating a reset code and sending it to the user's email.
 
@@ -224,12 +221,12 @@ def forgot_password(request: PasswordResetRequest, db: Session = Depends(get_db)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    reset_code = generate_verification_code()
+    reset_code = auth_manager.generate_verification_code()
     user.verification_token = reset_code
     db.commit()
 
     # reset_url = f"{BASE_URL}/reset-password/?token={reset_token}"  # Update with your domain
-    send_reset_code_on_email(user.email, user.name, reset_code)
+    auth_manager.send_reset_password_email(user.email, user.name, reset_code)
 
     return {"status": "ok", "message": "Password reset instructions have been sent to your email"}
 
@@ -237,7 +234,7 @@ def forgot_password(request: PasswordResetRequest, db: Session = Depends(get_db)
 ################# RESET PASSWORD CONFIRM #################################
 
 @router.post("/reset-password/")
-def reset_password(token: str, new_password: PasswordResetConfirm, db: Session = Depends(get_db)):
+def reset_password(token: str, new_password: PasswordResetConfirm, db: Session = Depends(get_db), auth_manager: AuthManager = Depends(get_auth_manager)):
     """
     Handle password reset requests by verifying the reset token and updating the user's password.
 
@@ -262,7 +259,7 @@ def reset_password(token: str, new_password: PasswordResetConfirm, db: Session =
         raise HTTPException(
             status_code=400, detail="Invalid or expired reset token")
 
-    user.password = Hasher.get_password_hash(new_password.new_password)
+    user.password = auth_manager.get_password_hash(new_password.new_password)
     # user.verification_token = None  # Invalidate the token after use
     db.commit()
 

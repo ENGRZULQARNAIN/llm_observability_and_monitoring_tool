@@ -4,344 +4,217 @@ import ssl
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from passlib.context import CryptContext
-from core.config import Settings
-import shortuuid
 from sqlalchemy.orm import Session
+import shortuuid
+from core.config import Settings
 from modules.Auth.models import Users
-import os
-from dotenv import load_dotenv
-load_dotenv()
-EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
-settings = Settings()
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+import bcrypt
 
-BASE_URL = settings.BASE_URL
-def send_verifiaction_code_on_email(receiver,good_name,verification_token):
+class AuthManager:
+    def __init__(self):
+        self.settings = Settings()
+        self.base_url = self.settings.BASE_URL
+        
+        # Email settings
+        self.smtp_server = "smtp.hostinger.com"
+        self.smtp_port = 465
+        self.sender_email = "support@sarihorganics.com"
+        self.smtp_password = "Support@4791"
 
-    """
-    Sends a verification email to a user with a verification token.
+    def verify_password(self, plain_password: str, hashed_password: str) -> bool:
+        return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password)
 
-    Args:
-        receiver (str): The email address of the user to send the verification email to.
-        good_name (str): The name of the user (e.g. "John Doe")
-        verification_token (str): The verification token to include in the email.
+    def get_password_hash(self, password: str) -> str:
+        pwd_bytes = password.encode('utf-8')
+        salt = bcrypt.gensalt()
+        return bcrypt.hashpw(password=pwd_bytes, salt=salt)
 
-    Returns:
-        None
-    """
-    port = 465 # For ssl
-    smtp_server = "smtp.hostinger.com"
-    sender_email = "support@sarihorganics.com"
-    receiver_email = receiver
-    subject = "ACCOUNT VERIFICATION LINK (OBAM AI)"
-    password = EMAIL_PASSWORD
+    def generate_verification_token(self) -> str:
+        return secrets.token_urlsafe(16)
 
-    body="""<!DOCTYPE html>
-    <html>
-      <head>
-        <style>
-          * {
-            font-family: "Montserrat", sans-serif;
-            color:#000000;
-          }
-          ul li
-            {
-                margin-bottom:5px;
-            }
-          body {
-            font-family: Arial, sans-serif;
-            background-color: #b3daff;
-            color: #000000;
-            font-family: "Montserrat", sans-serif;
-            padding:20px;
-          }
-          .container {
-            max-width: 100%;
-            color: white;
-            margin: 0 auto;
-            padding: 20px;
-            border: 1px solid white;
-            background-color: #EFF3EA;
-            border-radius: 5px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-          }
+    def generate_verification_code(self) -> str:
+        return secrets.token_hex(3).upper()
 
-          .footer-like {
-            margin-top: auto;
-            padding: 6px;
-            text-align: center;
-          }
-          .footer-like p {
-            margin: 0;
-            padding: 4px;
-            color: #fafafa;
-            font-family: "Raleway", sans-serif;
-            letter-spacing: 1px;
-          }
-          .footer-like p a {
-            text-decoration: none;
-            font-weight: 600;
-          }
-
-          .logo {
-            width: 150px;
-            border:1px solid #8a3aff;
-          }
-          .verify-button
-          {
-          text-decoration:none;
-          background-color:#8a3aff;
-          border-radius:5px;
-          padding:10px;
-          border: none;
-          text-decoration:none;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-    <img src="https://sarihorganics.com/wp-content/uploads/2024/12/Purple_and_White_Modern_AI_Technology_Logo-removebg.png" alt="our logo" border="0" class="logo" />
-    """
-    body += f'<p>Dear {good_name},</p>' \
-            f'<h1><strong>Welcome to the OBAM AI!</strong></h1>' \
-            f'<p>Your Account Verification Link is placed below. Click on the link to get verified:</p>' \
-            f'<h4><b><a href="{BASE_URL}verify?token={verification_token}" class="verify-button" style="color:#b3daff;">Click here to Verify Your Account</a></b></h4>'
-    body+="""
-          <p><b>Sincerely,</b><br />The OBAM AI Team</p>
-          <div class="footer-like">
-            <p>
-              Powered by OBAM AI
-            </p>
-          </div>
-        </div>
-      </body>
-    </html>"""
-
-    # Create a multipart message and set headers
-    message = MIMEMultipart()
-    message["From"] = sender_email
-    message["To"] = receiver_email
-    message["Subject"] = subject
-
-    # Add body to email
-    message.attach(MIMEText(body, "html"))
-
-    # Create a secure SSL context
-    context = ssl.create_default_context()
-
-    # Try to log in to server and send email
-    try:
-        server = smtplib.SMTP_SSL(smtp_server, port,context)
-        # server.starttls(context=context)  # Secure the connection
-        server.login(sender_email, password)
-        server.sendmail(sender_email, receiver_email, message.as_string())
-    except Exception as e:
-        print(f"Failed to send email: {e}")
-    finally:
-        server.quit()
-
-
-########################## for got ###################################################
-def send_reset_code_on_email(receiver,good_name,reset_token):
-
-    """
-    Sends a password reset email to a user with a reset token.
-
-    Args:
-        receiver (str): The email address of the user to send the password reset email to.
-        good_name (str): The name of the user (e.g. "John Doe")
-        reset_token (str): The reset token to include in the email.
-
-    Returns:
-        None
-    """
-    port = 465 # For starttls
-    smtp_server = "smtp.hostinger.com,"
-    sender_email = "support@sarihorganics.com"
-    receiver_email = receiver
-    subject = "Password Reset Link (OBAM AI)"
-    password = EMAIL_PASSWORD
-
-    body="""<!DOCTYPE html>
-    <html>
-      <head>
-        <style>
-          * {
-            font-family: "Montserrat", sans-serif;
-            color:#000000;
-          }
-          ul li
-            {
-                margin-bottom:5px;
-            }
-          body {
-            font-family: Arial, sans-serif;
-            background-color: #b3daff;
-            color: #000000;
-            font-family: "Montserrat", sans-serif;
-            padding:20px;
-          }
-          .container {
-            max-width: 100%;
-            color: white;
-            margin: 0 auto;
-            padding: 20px;
-            border: 1px solid white;
-            background-color: #EFF3EA;
-            border-radius: 5px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-          }
-
-          .footer-like {
-            margin-top: auto;
-            padding: 6px;
-            text-align: center;
-          }
-          .footer-like p {
-            margin: 0;
-            padding: 4px;
-            color: #fafafa;
-            font-family: "Raleway", sans-serif;
-            letter-spacing: 1px;
-          }
-          .footer-like p a {
-            text-decoration: none;
-            font-weight: 600;
-          }
-
-          .logo {
-            width: 150px;
-            border:1px solid #8a3aff;
-          }
-          .verify-button
-          {
-          background-color:#8a3aff;
-          border-radius:5px;
-          padding:10px;
-          border: none;
-          text-decoration:none;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-    <img src="https://sarihorganics.com/wp-content/uploads/2024/12/Purple_and_White_Modern_AI_Technology_Logo-removebg.png" alt="OBAM-Logo" border="0" class="logo" />
-    """
-    body += f'<p>Dear {good_name},</p>' \
-    f'<h1><strong>Password Reset Link OBAM AI!</strong></h1>' \
-    f'<p>Your password reset Link  is placed below:</p>' \
-    f'<h4><b><a href="{BASE_URL}reset-password?token={reset_token}" class="verify-button" style="color:#b3daff;">Click here to Reset your password</a></b></h4>'
-    body+="""
-          <p><b>Sincerely,</b><br />The OBAM AI Team</p>
-          <div class="footer-like">
-            <p>
-              Powered by OBAM AI
-            </p>
-          </div>
-        </div>
-      </body>
-    </html>"""
-
-    # Create a multipart message and set headers
-    message = MIMEMultipart()
-    message["From"] = sender_email
-    message["To"] = receiver_email
-    message["Subject"] = subject
-
-    # Add body to email
-    message.attach(MIMEText(body, "html"))
-
-    # Create a secure SSL context
-    context = ssl.create_default_context()
-    # Try to log in to server and send email
-    try:
-        server = smtplib.SMTP_SSL(smtp_server, port,context)
-        # server.starttls(context=context)  # Secure the connection
-        server.login(sender_email, password)
-        server.sendmail(sender_email, receiver_email, message.as_string())
-    except Exception as e:
-        print(f"Failed to send email: {e}")
-    finally:
-        server.quit()
-#############################################################################
-
-
-
-
-def generate_verification_token():
-    """
-    Generates a 16 character long verification token.
-
-    Returns:
-        str: A 16 character long verification token.
-    """
-    return secrets.token_urlsafe(16)
-
-############################################################################
-def generate_verification_code():
-    # Generate a random 6-digit hexadecimal code
-    """
-    Generates a random 6-digit hexadecimal verification code.
-
-    Returns:
-        str: A 6-digit hexadecimal code in uppercase.
-    """
-
-    verification_code = secrets.token_hex(3).upper()
-    return verification_code
-
-def generate_unique_id_for_user(db: Session):
-    """
-    Generates a unique user ID by creating a short UUID and ensuring it does not
-    already exist in the database.
-
-    Args:
-        db (Session): The database session used to query existing user IDs.
-
-    Returns:
-        str: A unique user ID that is not already present in the database.
-    """
-
-    unique_id = str(shortuuid.uuid())
-    while db.query(Users).filter(Users.user_id == unique_id).first():
+    def generate_unique_user_id(self, db: Session) -> str:
         unique_id = str(shortuuid.uuid())
-    return unique_id
+        while db.query(Users).filter(Users.user_id == unique_id).first():
+            unique_id = str(shortuuid.uuid())
+        return unique_id
 
-def get_unique_id():
-    """
-    Generates a unique, short, URL-safe UUID.
+    def send_verification_email(self, receiver: str, good_name: str, verification_token: str) -> None:
+        subject = "ACCOUNT VERIFICATION LINK (OBAM AI)"
+        html_body = self._generate_verification_email_template(good_name, verification_token)
+        self._send_email(receiver, subject, html_body)
 
-    Returns:
-        str: A short, URL-safe UUID.
-    """
-    return str(shortuuid.uuid())
+    def send_reset_password_email(self, receiver: str, good_name: str, reset_token: str) -> None:
+        subject = "Password Reset Link (OBAM AI)"
+        html_body = self._generate_reset_password_email_template(good_name, reset_token)
+        self._send_email(receiver, subject, html_body)
 
+    def _send_email(self, receiver: str, subject: str, html_body: str) -> None:
+        message = MIMEMultipart()
+        message["From"] = self.sender_email
+        message["To"] = receiver
+        message["Subject"] = subject
+        message.attach(MIMEText(html_body, "html"))
 
-class Hasher():
-    @staticmethod
-    def verify_password(plain_password, hashed_password):
-        """Verifies a password against a hashed password.
+        context = ssl.create_default_context()
+        
+        try:
+            with smtplib.SMTP_SSL(self.smtp_server, self.smtp_port, context=context) as server:
+                server.login(self.sender_email, self.smtp_password)
+                server.sendmail(self.sender_email, receiver, message.as_string())
+        except Exception as e:
+            print(f"Failed to send email: {e}")
 
-        Args:
-            plain_password (str): The password to verify.
-            hashed_password (str): The hashed password to verify against.
+    def _generate_verification_email_template(self, good_name: str, verification_token: str) -> str:
+        body = f"""<!DOCTYPE html>
+        <html>
+          <head>
+            <style>
+              * {{
+                font-family: "Montserrat", sans-serif;
+                color:#000000;
+              }}
+              ul li {{
+                  margin-bottom:5px;
+              }}
+              body {{
+                font-family: Arial, sans-serif;
+                background-color: #b3daff;
+                color: #000000;
+                padding:20px;
+              }}
+              .container {{
+                max-width: 100%;
+                color: white;
+                margin: 0 auto;
+                padding: 20px;
+                border: 1px solid white;
+                background-color: #EFF3EA;
+                border-radius: 5px;
+                box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+              }}
+              .footer-like {{
+                margin-top: auto;
+                padding: 6px;
+                text-align: center;
+              }}
+              .footer-like p {{
+                margin: 0;
+                padding: 4px;
+                color: #fafafa;
+                font-family: "Raleway", sans-serif;
+                letter-spacing: 1px;
+              }}
+              .footer-like p a {{
+                text-decoration: none;
+                font-weight: 600;
+              }}
+              .logo {{
+                width: 150px;
+                border:1px solid #8a3aff;
+              }}
+              .verify-button {{
+                text-decoration:none;
+                background-color:#8a3aff;
+                border-radius:5px;
+                padding:10px;
+                border: none;
+              }}
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <img src="https://sarihorganics.com/wp-content/uploads/2024/12/Purple_and_White_Modern_AI_Technology_Logo-removebg.png" alt="our logo" border="0" class="logo" />
+              <p>Dear {good_name},</p>
+              <h1><strong>Welcome to the OBAM AI!</strong></h1>
+              <p>Your Account Verification Link is placed below. Click on the link to get verified:</p>
+              <h4><b><a href="{self.base_url}verify?token={verification_token}" class="verify-button" style="color:#b3daff;">Click here to Verify Your Account</a></b></h4>
+              <p><b>Sincerely,</b><br />The OBAM AI Team</p>
+              <div class="footer-like">
+                <p>
+                  Powered by OBAM AI
+                </p>
+              </div>
+            </div>
+          </body>
+        </html>"""
+        return body
 
-        Returns:
-            bool: True if the password is valid, False otherwise.
-        """
-        return pwd_context.verify(plain_password, hashed_password)
-
-    @staticmethod
-    def get_password_hash(password):
-        """
-        Generates a hashed version of the given password.
-
-        Args:
-            password (str): The password to hash.
-
-        Returns:
-            str: The hashed password.
-        """
-        return pwd_context.hash(password)
-    
+    def _generate_reset_password_email_template(self, good_name: str, reset_token: str) -> str:
+        body = """<!DOCTYPE html>
+        <html>
+          <head>
+            <style>
+              * {
+                font-family: "Montserrat", sans-serif;
+                color:#000000;
+              }
+              ul li {
+                  margin-bottom:5px;
+              }
+              body {
+                font-family: Arial, sans-serif;
+                background-color: #b3daff;
+                color: #000000;
+                font-family: "Montserrat", sans-serif;
+                padding:20px;
+              }
+              .container {
+                max-width: 100%;
+                color: white;
+                margin: 0 auto;
+                padding: 20px;
+                border: 1px solid white;
+                background-color: #EFF3EA;
+                border-radius: 5px;
+                box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+              }
+              .footer-like {
+                margin-top: auto;
+                padding: 6px;
+                text-align: center;
+              }
+              .footer-like p {
+                margin: 0;
+                padding: 4px;
+                color: #fafafa;
+                font-family: "Raleway", sans-serif;
+                letter-spacing: 1px;
+              }
+              .footer-like p a {
+                text-decoration: none;
+                font-weight: 600;
+              }
+              .logo {
+                width: 150px;
+                border:1px solid #8a3aff;
+              }
+              .verify-button {
+                background-color:#8a3aff;
+                border-radius:5px;
+                padding:10px;
+                border: none;
+                text-decoration:none;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <img src="https://sarihorganics.com/wp-content/uploads/2024/12/Purple_and_White_Modern_AI_Technology_Logo-removebg.png" alt="OBAM-Logo" border="0" class="logo" />
+              <p>Dear {good_name},</p>
+              <h1><strong>Password Reset Link OBAM AI!</strong></h1>
+              <p>Your password reset Link is placed below:</p>
+              <h4><b><a href="{self.base_url}reset-password?token={reset_token}" class="verify-button" style="color:#b3daff;">Click here to Reset your password</a></b></h4>
+              <p><b>Sincerely,</b><br />The OBAM AI Team</p>
+              <div class="footer-like">
+                <p>
+                  Powered by OBAM AI
+                </p>
+              </div>
+            </div>
+          </body>
+        </html>"""
+        return body
