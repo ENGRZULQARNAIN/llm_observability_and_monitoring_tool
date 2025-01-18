@@ -30,7 +30,7 @@ application.add_middleware(
 
 @application.get("/")
 async def read_items():
-    return {"message":"OBAM AI: v0.1.1"}
+    return {"message":"OBAM AI: v0.1.2"}
 
 
 application.include_router(auth_routers.router)
