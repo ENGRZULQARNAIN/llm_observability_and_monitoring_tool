@@ -1,7 +1,6 @@
 import os
 import sys
 from pathlib import Path
-from modules import services
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -13,6 +12,7 @@ BASE_DIR = Path(__file__).resolve().parent
 sys.path.append(str(BASE_DIR))
 from core.database import create_tables
 from modules.auth import auth_routers
+from modules import services
 print("Python path:", sys.path)
 print("Current working directory:", os.getcwd())
 print("Base directory:", BASE_DIR)
