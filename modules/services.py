@@ -1,8 +1,8 @@
 from fastapi import HTTPException,APIRouter
 from fastapi.responses import FileResponse
-from .auth.schemas import AccessToken
+from .Auth.schemas import AccessToken
 from core.database import SessionLocal
-from .auth.models import Users
+from .Auth.models import Users
 
 
 router = APIRouter(tags=["SERVICES"])

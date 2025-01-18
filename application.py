@@ -11,7 +11,7 @@ BASE_DIR = Path(__file__).resolve().parent
 # Add the app directory to Python path
 sys.path.append(str(BASE_DIR))
 from core.database import create_tables
-from modules.auth import auth_routers
+from modules.Auth import auth_routers
 from modules import services
 print("Python path:", sys.path)
 print("Current working directory:", os.getcwd())

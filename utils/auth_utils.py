@@ -7,7 +7,7 @@ from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 import shortuuid
 from core.config import Settings
-from modules.auth.models import Users
+from modules.Auth.models import Users
 from dotenv import load_dotenv
 import os
 load_dotenv()

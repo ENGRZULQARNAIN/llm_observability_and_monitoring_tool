@@ -4,7 +4,7 @@ from sqlalchemy import (Boolean, Column, DateTime, Float, ForeignKey, Integer,
                         String, create_engine, desc)
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from auth.models import Users
+from Auth.models import Users
 from core.database import Base
 
 
