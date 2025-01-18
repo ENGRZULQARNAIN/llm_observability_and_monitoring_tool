@@ -1,5 +1,6 @@
 .env
 /venv/
+/lvenv/
 __pycache__/
 .vscode/
 .env
