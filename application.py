@@ -12,7 +12,7 @@ BASE_DIR = Path(__file__).resolve().parent
 # Add the app directory to Python path
 sys.path.append(str(BASE_DIR))
 from core.database import create_tables
-from modules.Auth import auth_routers
+from modules.auth import auth_routers
 print("Python path:", sys.path)
 print("Current working directory:", os.getcwd())
 print("Base directory:", BASE_DIR)
@@ -30,7 +30,7 @@ application.add_middleware(
 
 @application.get("/")
 async def read_items():
-    return {"message":"OBAM AI version v0.1.0"}
+    return {"message":"OBAM AI: v0.1.1"}
 
 
 application.include_router(auth_routers.router)
