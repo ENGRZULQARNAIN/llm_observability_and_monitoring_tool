@@ -1,4 +1,4 @@
-from datetime import datetime, UTC
+from datetime import datetime
 
 from sqlalchemy import (Boolean, Column, DateTime, Float, ForeignKey, Integer,
                         String, create_engine, desc)
@@ -20,4 +20,4 @@ class Projects(Base):
     is_active = Column(Boolean)
     test_interval_in_hrs = Column(Float)
     benchmark_knowledge_id = Column(String)
-    registered_at = Column(DateTime, default=lambda: datetime.now(UTC))
+    registered_at = Column(DateTime, default=datetime.utcnow)
