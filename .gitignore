@@ -5,3 +5,8 @@ __pycache__/
 .vscode/
 .env
 test_app.db
+all.py
+my_project_files.txt
+output_file.txt
+my-readme.md
+readme.md

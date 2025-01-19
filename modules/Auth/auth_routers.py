@@ -59,7 +59,7 @@ async def register(request: User, db: Session = Depends(get_db), auth_manager: A
         db.add(db_entry)
         db.commit()
         db.refresh(db_entry)
-
+        print(db_entry.verification_token)
         auth_manager.send_verification_email(
             db_entry.email, db_entry.name, db_entry.verification_token)
 

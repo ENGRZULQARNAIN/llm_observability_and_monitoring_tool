@@ -12,6 +12,7 @@ BASE_DIR = Path(__file__).resolve().parent
 sys.path.append(str(BASE_DIR))
 from core.database import create_tables
 from modules.Auth import auth_routers
+from modules.project_connections import project_routers
 from modules import services
 print("Python path:", sys.path)
 print("Current working directory:", os.getcwd())
@@ -30,12 +31,13 @@ application.add_middleware(
 
 @application.get("/")
 async def read_items():
-    return {"message":"OBAM AI: v0.1.3"}
+    return {"message":"OBAM AI: v0.1.4"}
 
 
 application.include_router(auth_routers.router)
 
 application.include_router(services.router)
+application.include_router(project_routers.router)
 
 # if __name__ == "__main__":
 #     create_tables()
