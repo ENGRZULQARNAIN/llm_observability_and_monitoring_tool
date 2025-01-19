@@ -30,7 +30,7 @@ async def create_project(project: ProjectCreate,token_data:AccessToken ,db: Sess
             payload_method=project.payload_method,
             payload_route=project.payload_route,
             payload_headers=project.payload_headers,
-            payload_body=project.payload_body,
+            payload_body=str(project.payload_body),
             is_active=project.is_active,
             test_interval_in_hrs=project.test_interval_in_hrs,
             benchmark_knowledge_id=project.benchmark_knowledge_id
@@ -40,7 +40,7 @@ async def create_project(project: ProjectCreate,token_data:AccessToken ,db: Sess
         db.commit()
         db.refresh(new_project)
 
-        return JSONResponse(content={"message": "Project created successfully"}, status_code=status.HTTP_201_CREATED)
+        return {"status":"ok","message": "Project created successfully"}
 
     except Exception as e:
         db.rollback()

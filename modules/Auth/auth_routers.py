@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -62,7 +62,6 @@ async def register(request: User, db: Session = Depends(get_db), auth_manager: A
         print(db_entry.verification_token)
         auth_manager.send_verification_email(
             db_entry.email, db_entry.name, db_entry.verification_token)
-
         return {
             "status": "ok",
             "message": "User registered successfully. Check your email for verification instructions.",
