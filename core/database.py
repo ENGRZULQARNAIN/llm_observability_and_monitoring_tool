@@ -1,7 +1,10 @@
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-from .config import Settings
+from .config import Settings, get_settings
+from motor.motor_asyncio import AsyncIOMotorClient
+from typing import Annotated
+from fastapi import Depends
 
 Base = declarative_base()
 settings = Settings()
@@ -22,3 +25,7 @@ def get_db():
     finally:
         db.close()
 
+async def get_mongodb(
+    settings: Annotated[Settings, Depends(get_settings)]
+):
+    return AsyncIOMotorClient(settings.MONGODB_URL)[settings.MONGODB_DB]
