@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from core.logger import logger
 
 
 # Get the absolute path to your app directory
@@ -18,7 +19,25 @@ print("Python path:", sys.path)
 print("Current working directory:", os.getcwd())
 print("Base directory:", BASE_DIR)
 
-application = FastAPI(title="OBAM AI FYP")
+
+async def startup_event():
+    """
+    Runs when the application starts.
+    Add initialization tasks here.
+    """
+    try:
+        # Initialize your startup tasks here
+        logger.info("Starting OBAM AI application...")
+        # create_tables()
+    except Exception as e:
+        logger.error(f"Startup error: {e}")
+
+# Initialize FastAPI application and register the startup event
+application = FastAPI(
+    title="OBAM AI FYP",
+    on_startup=[startup_event] 
+)
+
 
 application.add_middleware(
     CORSMiddleware,
@@ -31,13 +50,10 @@ application.add_middleware(
 
 @application.get("/")
 async def read_items():
-    return {"message":"OBAM AI: v0.1.7"}
+    return {"message":"OBAM AI: v0.1.8"}
 
 
 application.include_router(auth_routers.router)
 
 application.include_router(services.router)
 application.include_router(project_routers.router)
-
-# if __name__ == "__main__":
-#     create_tables()
