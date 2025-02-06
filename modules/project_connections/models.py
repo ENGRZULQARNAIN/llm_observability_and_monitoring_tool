@@ -11,11 +11,12 @@ class Projects(Base):
     project_id = Column(String, primary_key=True ,nullable=False, unique=True)
     user_id = Column(String)
     project_name = Column(String)
-    payload_type = Column(String) # possible values (GraphQL, Binary, Raw, Form Data) DropDown
-    pyload_base_url = Column(String) # must be valid 
-    payload_method = Column(String) # DropDown
-    payload_route = Column(String) # must be valid
-    payload_headers = Column(String) 
+    content_type = Column(String) # possible values (GraphQL, Binary, Raw, Form Data) DropDown
+    target_url = Column(String) # must be valid 
+    payload_method = Column(String) #calculated at run time
+    end_point = Column(String) # must be valid
+    header_keys = Column(String) 
+    header_values = Column(String)
     payload_body = Column(String)
     is_active = Column(Boolean)
     test_interval_in_hrs = Column(Float)

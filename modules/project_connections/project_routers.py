@@ -22,16 +22,16 @@ async def create_project(project: ProjectCreate,token_data:AccessToken ,db: Sess
         new_project = Projects(
             project_id= str(uuid4()),
             user_id=user.user_id,
-            project_name=project.project_name,
-            payload_type=project.payload_type,
-            pyload_base_url=project.payload_base_url,
-            payload_method=project.payload_method,
-            payload_route=project.payload_route,
-            payload_headers=project.payload_headers,
-            payload_body=str(project.payload_body),
-            is_active=project.is_active,
-            test_interval_in_hrs=project.test_interval_in_hrs,
-            benchmark_knowledge_id=project.benchmark_knowledge_id
+            project_name = project.project_name,
+            contents = project.payload_type,
+            target_url = project.payload_base_url,
+            payload_method = project.payload_method,
+            payload_route = project.payload_route,
+            payload_headers = project.payload_headers,
+            payload_body = str(project.payload_body),
+            is_active = project.is_active,
+            test_interval_in_hrs = project.test_interval_in_hrs,
+            benchmark_knowledge_id = project.benchmark_knowledge_id
         )
 
         db.add(new_project)
@@ -121,7 +121,7 @@ async def delete_project(project_id: str, token_data: AccessToken, db: Session =
         db.close()
 
 
-@router.get("/total-projects/")
+@router.post("/total-projects/")
 async def total_projects(token_data: AccessToken, db: Session = Depends(get_db)):
     try:
         user = db.query(Users).filter(Users.verification_token == token_data.access_token).first()
@@ -142,7 +142,7 @@ async def total_projects(token_data: AccessToken, db: Session = Depends(get_db))
         db.close()
 
 
-@router.get("/all-projects/")
+@router.post("/all-projects/")
 async def all_projects(token_data: AccessToken, db: Session = Depends(get_db)):
     try:
         user = db.query(Users).filter(Users.verification_token == token_data.access_token).first()

@@ -52,11 +52,13 @@ application.add_middleware(
 
 @application.get("/")
 async def read_items():
-    return {"message":"OBAM AI: v0.1.8"}
+    return {"message":"OBAM AI: v0.1.9"}
 
 
 application.include_router(auth_routers.router)
-
 application.include_router(services.router)
 application.include_router(project_routers.router)
 application.include_router(benchmark_routes.router)
+
+# if __name__ == "__main__":
+#     create_tables()
