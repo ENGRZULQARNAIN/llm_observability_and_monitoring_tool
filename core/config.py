@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     # MongoDB Configuration
     MONGODB_URL: str 
     MONGODB_DB: str 
+    GEMINI_API_KEY: str
 
     class Config:
         env_file = ".env"
