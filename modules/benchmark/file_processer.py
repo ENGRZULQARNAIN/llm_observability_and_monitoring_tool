@@ -52,3 +52,32 @@ class FileProcessor:
             return db_chunks
         finally:
             os.unlink(tmp_path)
+
+    async def process_file_content(self, content: bytes, filename: str):
+        with tempfile.NamedTemporaryFile(delete=False, suffix=filename) as tmp:
+            tmp.write(content)
+            tmp_path = tmp.name
+
+        try:
+            ext = os.path.splitext(filename)[-1].lower()
+            loader_class = self.loader_mapping.get(ext, UnstructuredFileLoader)
+            loader = loader_class(tmp_path)
+
+            documents = loader.load()
+            chunks = self.text_splitter.split_documents(documents)
+
+            db_chunks = []
+            for i, chunk in enumerate(chunks):
+                chunk_data = Chunk(
+                    content=chunk.page_content,
+                    metadata={
+                        "source": filename,
+                        "chunk_number": i + 1,
+                        **chunk.metadata
+                    }
+                )
+                db_chunks.append(chunk_data)
+            
+            return db_chunks
+        finally:
+            os.unlink(tmp_path)
