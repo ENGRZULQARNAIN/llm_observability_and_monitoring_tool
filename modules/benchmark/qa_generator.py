@@ -1,6 +1,14 @@
 from pydantic import BaseModel, Field
 from typing import List
 from langchain.output_parsers import PydanticOutputParser
+from langchain_core.messages import SystemMessage, HumanMessage
+from modules.benchmark.qa_pair import QAPair
+from datetime import datetime
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain.output_parsers import PydanticOutputParser
+from motor.motor_asyncio import AsyncIOMotorClient
+
+from core.config import Settings
 
 class QuestionAnswer(BaseModel):
     question: str = Field(..., description="The generated question")
@@ -43,15 +51,6 @@ Requirements:
     )
     
     num_questions: int = Field(default=3, ge=1, le=10)
-
-
-from langchain_core.messages import SystemMessage, HumanMessage
-from modules.benchmark.qa_pair import QAPair
-from datetime import datetime
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain.output_parsers import PydanticOutputParser
-from motor.motor_asyncio import AsyncIOMotorClient
-from core.config import Settings
 
 
 class QAGenerator:
