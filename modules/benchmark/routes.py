@@ -1,17 +1,23 @@
 from core.database import get_mongodb
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, BackgroundTasks, Form
+from sqlalchemy.orm import Session
+from modules.project_connections.models import Projects
+from modules.Auth.models import Users
 from fastapi.responses import JSONResponse
 from modules.benchmark.file_processer import FileProcessor
 from modules.benchmark.qa_generator import QAGenerator
 from modules.benchmark.schemas import FileProcessingResponse
+from  modules.project_connections.schemas import ProjectCreate
 from typing import List
+from modules.Auth.schemas import AccessToken
+from core.database import get_db
 from datetime import datetime
 from core.database import get_mongodb
 from core.config import get_settings
 from core.logger import logger
 from pydantic import BaseModel
 from motor.motor_asyncio import AsyncIOMotorClient
-
+from uuid import uuid4
 router = APIRouter(tags=["Benchmark"])
 
 async def get_file_processor():
@@ -35,12 +41,42 @@ class FileProcessingResponse(BaseModel):
 @router.post("/process-file", response_model=FileProcessingResponse)
 async def process_file(
     background_tasks: BackgroundTasks,
+    token_data: str = Form(...),
     files: List[UploadFile] = File(...),
+    project: str = Form(...),
+    db: Session = Depends(get_db),
     file_processor: FileProcessor = Depends(get_file_processor),
     qa_generator: QAGenerator = Depends(get_qa_generator),
-    db: AsyncIOMotorClient = Depends(get_mongodb),
+    mongo_db: AsyncIOMotorClient = Depends(get_mongodb),
 ):
+    token_data = AccessToken.model_validate_json(token_data)
+    project = ProjectCreate.model_validate_json(project)
+
     try:
+        user = db.query(Users).filter(Users.verification_token == token_data.access_token).first()
+        
+        if not user or not user.isVerified:
+            raise HTTPException(status_code=401, detail="Invalid token or unauthorized user")
+        
+        new_project = Projects(
+            project_id=str(uuid4()),
+            user_id=user.user_id,
+            project_name=project.project_name,
+            content_type=project.content_type,
+            target_url=project.target_url,
+            end_point=project.end_point,
+            header_keys=",".join(project.header_keys),  # Convert list to comma-separated string
+            header_values=",".join(project.header_values),  # Convert list to comma-separated string
+            payload_body=str(project.payload_body),
+            is_active=project.is_active,
+            test_interval_in_hrs=project.test_interval_in_hrs,
+            benchmark_knowledge_id=project.benchmark_knowledge_id
+        )
+
+        db.add(new_project)
+        db.commit()
+        db.refresh(new_project)
+        logger.info(f"Project created successfully")
         # Read file contents before passing to background task
         file_data = []
         for file in files:
@@ -52,17 +88,21 @@ async def process_file(
         
         background_tasks.add_task(
             benchmark_creation_background_process,
-            file_data=file_data,  # Pass file_data instead of files
+            file_data=file_data,
+            user_id=user.user_id,
+            project_id=new_project.project_id,
             file_processor=file_processor,
             qa_generator=qa_generator,
-            db=db
+            db=mongo_db
         )
-        return JSONResponse(content={"message": "File processing started"})
+        return JSONResponse(content={"message": "Project Creation Started"})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 async def benchmark_creation_background_process(
     file_data: List[dict],  # Changed parameter type
+    user_id: str,
+    project_id: str,
     file_processor: FileProcessor = Depends(get_file_processor),
     qa_generator: QAGenerator = Depends(get_qa_generator),
     db: AsyncIOMotorClient = Depends(get_mongodb)):
@@ -98,5 +138,16 @@ async def benchmark_creation_background_process(
         "qa_pairs": [qa.model_dump() for qa in file_qa_pairs],
         "timestamp": datetime.utcnow()
     }
+
+    qa_doc["project_id"] = project_id
+    qa_doc["user_id"] = user_id
     qa_doc_result = await qa_collection.insert_one(qa_doc)
+    
     qa_doc_id = str(qa_doc_result.inserted_id)
+    logger.info(f"Project updated with chunk and QA document IDs")
+    qa_doc_id = str(qa_doc_result.inserted_id)
+    logger.info(f"QA document ID: {qa_doc_id}")
+    logger.info(f"Chunk document ID: {chunk_doc_id}")
+    logger.info(f"Project ID: {project_id}")
+    logger.info(f"User ID: {user_id}")
+    logger.info("Finish")

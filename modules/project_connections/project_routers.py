@@ -10,45 +10,6 @@ from uuid import uuid4
 from core.logger import logger
 router = APIRouter(tags=["PROJECT CONNECTIONS"])
 
-@router.post("/create-project/")
-async def create_project(project: ProjectCreate,token_data:AccessToken ,db: Session = Depends(get_db)):
-
-    try:
-        user = db.query(Users).filter(Users.verification_token == token_data.access_token).first()
-        
-        if not user or not user.isVerified:
-            raise HTTPException(status_code=401, detail="Invalid token or unauthorized user")
-        
-        new_project = Projects(
-            project_id= str(uuid4()),
-            user_id=user.user_id,
-            project_name = project.project_name,
-            contents = project.payload_type,
-            target_url = project.payload_base_url,
-            payload_method = project.payload_method,
-            payload_route = project.payload_route,
-            payload_headers = project.payload_headers,
-            payload_body = str(project.payload_body),
-            is_active = project.is_active,
-            test_interval_in_hrs = project.test_interval_in_hrs,
-            benchmark_knowledge_id = project.benchmark_knowledge_id
-        )
-
-        db.add(new_project)
-        db.commit()
-        db.refresh(new_project)
-        logger.info(f"Project created successfully")
-
-        return {"status":"ok","message": "Project created successfully"}
-
-    except Exception as e:
-        logger.error(f"Error creating project: {str(e)}")
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-
-    finally:
-        db.close()
-
 @router.put("/update-project/{project_id}")
 async def update_project(project_id: str, project: ProjectCreate, token_data: AccessToken, db: Session = Depends(get_db)):
     try:

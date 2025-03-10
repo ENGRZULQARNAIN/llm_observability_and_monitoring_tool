@@ -2,9 +2,8 @@ import os
 import sys
 from pathlib import Path
 from fastapi import FastAPI
+from fastapi.background import BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-
-
 # Get the absolute path to your app directory
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -15,11 +14,23 @@ from modules.Auth import auth_routers
 from core.logger import logger
 from modules.project_connections import project_routers
 from modules.benchmark import routes as benchmark_routes
+from modules.monitor import project_monitoror
 from modules import services
-print("Python path:", sys.path)
-print("Current working directory:", os.getcwd())
-print("Base directory:", BASE_DIR)
+import asyncio
 
+async def scheduled_project_monitoror():
+    """
+    Runs the project_monitoror function periodically.
+    """
+    while True:
+        try:
+            project_monitoror.project_monitoror()
+            logger.info("Project monitoror executed successfully")
+        except Exception as e:
+            logger.error(f"Error in scheduled project monitoror: {e}")
+        
+        # Wait for some time before running again (e.g., every hour)
+        await asyncio.sleep(3600)  # Sleep for 1 hour
 
 async def startup_event():
     """
@@ -30,16 +41,23 @@ async def startup_event():
         # Initialize your startup tasks here
         logger.info("Starting OBAM AI application...")
         # create_tables()
+        logger.info("Starting project monitoror as a background task...")
+        asyncio.create_task(scheduled_project_monitoror())
+        logger.info("OBAM AI application started successfully")
     except Exception as e:
         logger.error(f"Startup error: {e}")
-    pass
+
+async def run_project_monitoror():
+    """
+    Wrapper function to call the project_monitoror function.
+    """
+    project_monitoror.project_monitoror()
 
 # Initialize FastAPI application and register the startup event
 application = FastAPI(
     title="OBAM AI FYP",
     on_startup=[startup_event] 
 )
-
 
 application.add_middleware(
     CORSMiddleware,
@@ -49,16 +67,11 @@ application.add_middleware(
     allow_headers=["*"],
 )
 
-
 @application.get("/")
 async def read_items():
     return {"message":"OBAM AI: v0.2.0"}
-
 
 application.include_router(auth_routers.router)
 application.include_router(services.router)
 application.include_router(project_routers.router)
 application.include_router(benchmark_routes.router)
-
-# if __name__ == "__main__":
-#     create_tables()
