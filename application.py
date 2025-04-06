@@ -42,6 +42,7 @@ async def startup_event():
         logger.info("Starting OBAM AI application...")
         # create_tables()
         logger.info("Starting project monitoror as a background task...")
+        # Create the background task properly
         asyncio.create_task(scheduled_project_monitoror())
         logger.info("OBAM AI application started successfully")
     except Exception as e:
@@ -51,7 +52,7 @@ async def run_project_monitoror():
     """
     Wrapper function to call the project_monitoror function.
     """
-    project_monitoror.project_monitoror()
+    await project_monitoror.project_monitoror()
 
 # Initialize FastAPI application and register the startup event
 application = FastAPI(

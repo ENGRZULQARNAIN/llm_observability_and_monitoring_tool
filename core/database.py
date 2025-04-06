@@ -24,8 +24,13 @@ def get_db():
         yield db
     finally:
         db.close()
+async def get_mongodb(settings=None):
+    """Get MongoDB connection asynchronously"""
+    if settings is None:
+        from core.config import get_settings
+        settings = get_settings()
 
-async def get_mongodb(
-    settings: Annotated[Settings, Depends(get_settings)]
-):
-    return AsyncIOMotorClient(settings.MONGODB_URL)[settings.MONGODB_DB]
+    client = AsyncIOMotorClient(settings.MONGODB_URL)
+    db = client[settings.MONGODB_DB]
+    return db
+    # return AsyncIOMotorClient(settings.MONGODB_URL)[settings.MONGODB_DB]

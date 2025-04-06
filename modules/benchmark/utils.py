@@ -59,31 +59,89 @@ Avoid simply stating the correct answer at the outset.
 
 
 class TestRunner:    
-    async def __init__(self, project_id):
+    def __init__(self, project_id):
+        """Regular constructor - no async operations here"""
         self.project_id = project_id
         self.db = SessionLocal()
-        self.mongo_db = await get_mongodb(settings=settings)
-        self.qa_collection = self.mongo_db.qa_collection
-        self.test_collection = self.mongo_db.test_results
+        # Initialize these to None - they'll be set up in run()
+        self.mongo_db = None
+        self.qa_collection = None
+        self.test_collection = None
     
-    def _fetch_qa_by_project_id(self):
-        """Fetch QA pairs for project from MongoDB"""
-        qa_doc = self.qa_collection.find_one({"project_id": self.project_id})
-        if not qa_doc:
-            raise ValueError(f"No QA pairs found for project {self.project_id}")
-        return [QAPair(**qa) for qa in qa_doc.get("qa_pairs", [])]
-
     def _fetch_payload_info_by_project_id(self):
         """Fetch project info from SQL database"""
         return self.db.query(Projects).filter(Projects.project_id==self.project_id).first()
 
+    async def run(self):
+        """Run all tests for project"""
+        try:
+            # Set up MongoDB connection first
+            from core.config import get_settings
+            settings = get_settings()
+            
+            # Connect to MongoDB directly here
+            from motor.motor_asyncio import AsyncIOMotorClient
+            client = AsyncIOMotorClient(settings.MONGODB_URL)
+            self.mongo_db = client[settings.MONGODB_DB]
+            self.qa_collection = self.mongo_db.qa_collection
+            self.test_collection = self.mongo_db.test_results
+            
+            # Fetch project data
+            project_data = self._fetch_payload_info_by_project_id()
+            
+            # Fetch QA pairs
+            qa_doc = await self.qa_collection.find_one({"project_id": self.project_id})
+            if not qa_doc:
+                logger.warning(f"No QA pairs found for project {self.project_id}")
+                return []
+                
+            qa_pairs = [QAPair(**qa) for qa in qa_doc.get("qa_pairs", [])]
+            
+            # Run tests
+            results = []
+            for qa in qa_pairs:
+                hallucination = await self._run_test_for_hallucinations(qa)
+                helpfulness = await self._run_test_for_helpfullness(qa)
+                results.extend([hallucination, helpfulness])
+            
+            # Store results
+            await self.test_collection.insert_one({
+                "project_id": self.project_id,
+                "results": results,
+                "timestamp": datetime.utcnow()
+            })
+            
+            # Update test info in SQL database
+            from modules.monitor.models import TestInfo
+            test_info = self.db.execute(select(TestInfo).filter(TestInfo.project_id == self.project_id)).first()
+            if test_info:
+                test_info = test_info[0]  # Extract from result proxy
+                test_info.last_test_conducted = datetime.utcnow()
+            else:
+                # Create new test info
+                test_info = TestInfo(
+                    project_id=self.project_id,
+                    last_test_conducted=datetime.utcnow()
+                )
+                self.db.add(test_info)
+            
+            self.db.commit()
+            return results
+            
+        except Exception as e:
+            logger.error(f"Error in TestRunner.run: {str(e)}")
+            raise
+        finally:
+            if self.db:
+                self.db.close()
+    
     async def _run_test_for_hallucinations(self, qa_pair: QAPair):
         """Evaluate hallucination using Gemini"""
         messages = [
             SystemMessage(content=hallucination_prompt),
             HumanMessage(content=f"FACTS:\n{qa_pair.context}\n\n QUESTION:\n {qa_pair.question}\n\n STUDENT ANSWER:\n{qa_pair.answer}")
         ]
-        response = await self.llm.ainvoke(messages)
+        response = await llm.ainvoke(messages)
         return {
             "score": 1 if "score: 1" in response.content.lower() else 0,
             "explanation": response.content,
@@ -95,37 +153,13 @@ class TestRunner:
         messages = [
             SystemMessage(content=helpfullness_prompt),
             HumanMessage(content=f"FACTS:\n{qa_pair.context}\n\n QUESTION:\n {qa_pair.question}\n\n STUDENT ANSWER:\n{qa_pair.answer}")
-
         ]
-        response = await self.llm.ainvoke(messages)
+        response = await llm.ainvoke(messages)
         return {
             "score": 1 if "score: 1" in response.content.lower() else 0,
             "explanation": response.content,
             "type": "helpfulness"
         }
-
-    async def _store_results(self, results):
-        """Store test results in MongoDB"""
-        await self.test_collection.insert_one({
-            "project_id": self.project_id,
-            "results": results,
-            "timestamp": datetime.utcnow()
-        })
-
-    async def run(self):
-        """Run all tests for project"""
-        project_data = self._fetch_payload_info_by_project_id()
-        qa_pairs = self._fetch_qa_by_project_id()
-        
-        results = []
-        for qa in qa_pairs:
-            hallucination = await self._run_test_for_hallucinations(qa)
-            helpfulness = await self._run_test_for_helpfullness(qa)
-            results.extend([hallucination, helpfulness])
-        
-        await self._store_results(results)
-        return results
-
 
 
 
