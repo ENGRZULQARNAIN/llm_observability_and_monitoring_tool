@@ -24,7 +24,7 @@ async def scheduled_project_monitoror():
     """
     while True:
         try:
-            project_monitoror.project_monitoror()
+            await project_monitoror.project_monitoror()
             logger.info("Project monitoror executed successfully")
         except Exception as e:
             logger.error(f"Error in scheduled project monitoror: {e}")
