@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     MONGODB_URL: str 
     MONGODB_DB: str 
     GEMINI_API_KEY: str
-
+    EMAIL_PASSWORD: str
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

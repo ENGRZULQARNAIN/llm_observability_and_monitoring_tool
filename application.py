@@ -30,7 +30,7 @@ async def scheduled_project_monitoror():
             logger.error(f"Error in scheduled project monitoror: {e}")
         
         # Wait for some time before running again (e.g., every hour)
-        await asyncio.sleep(3600)  # Sleep for 1 hour
+        await asyncio.sleep(3600//2)  # Sleep for 0.5 hour
 
 async def startup_event():
     """

@@ -202,7 +202,7 @@ def resendVerificationToken(email: str, auth_manager: AuthManager = Depends(get_
 @router.post("/forgot-password/")
 async def forgot_password(request: PasswordResetRequest, db: Session = Depends(get_db), auth_manager: AuthManager = Depends(get_auth_manager)):
     """
-    Handle forgot password requests by generating a reset code and sending it to the user's email.
+    Handle forgot password requests by generating a reset token and sending it to the user's email.
 
     Args:
     request (PasswordResetRequest): The request object containing the user's email.
@@ -215,24 +215,26 @@ async def forgot_password(request: PasswordResetRequest, db: Session = Depends(g
     HTTPException: If the user's email is not found in the database.
 
     This function checks if a user with the given email exists in the database. If the user is found,
-    a verification code is generated and stored as the user's verification token. The reset code is then
+    a secure reset token is generated and stored as the user's verification token. The reset link is then
     sent to the user's email address, allowing them to reset their password.
     """
     try:
-
         user = db.query(Users).filter(Users.email == request.email).first()
         if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+            # Return a generic message to prevent email enumeration
+            return {"status": "ok", "message": "If your email is registered, you will receive password reset instructions."}
 
-        reset_code = auth_manager.generate_verification_code()
-        user.verification_token = reset_code
+        # Generate a secure reset token
+        reset_token = auth_manager.generate_verification_token()
+        user.verification_token = reset_token
         db.commit()
 
-        # reset_url = f"{BASE_URL}/reset-password/?token={reset_token}"  # Update with your domain
-        auth_manager.send_reset_password_email(user.email, user.name, reset_code)
+        # Send the reset password email
+        auth_manager.send_reset_password_email(user.email, user.name, reset_token)
 
-        return {"status": "ok", "message": "Password reset instructions have been sent to your email"}
+        return {"status": "ok", "message": "If your email is registered, you will receive password reset instructions."}
     except Exception as e:
+        db.rollback()
         return {"status": "error", "message": str(e), "data": None}
     finally:
         db.close()
@@ -240,7 +242,7 @@ async def forgot_password(request: PasswordResetRequest, db: Session = Depends(g
 
 ################# RESET PASSWORD CONFIRM #################################
 
-@router.post("/reset-password/")
+@router.post("/update-reset-password/{token}")
 async def reset_password(token: str, new_password: PasswordResetConfirm, db: Session = Depends(get_db), auth_manager: AuthManager = Depends(get_auth_manager)):
     """
     Handle password reset requests by verifying the reset token and updating the user's password.
@@ -260,17 +262,25 @@ async def reset_password(token: str, new_password: PasswordResetConfirm, db: Ses
     If the user is found, it updates the user's password with the new password provided and invalidates the
     reset token. If the token is invalid or expired, it raises an HTTPException with a 400 status code.
     """
-    
-    user = db.query(Users).filter(Users.verification_token == token).first()
-    if not user:
-        raise HTTPException(
-            status_code=400, detail="Invalid or expired reset token")
+    try:
+        user = db.query(Users).filter(Users.verification_token == token).first()
+        if not user:
+            raise HTTPException(
+                status_code=400, detail="Invalid or expired reset token")
 
-    user.password = auth_manager.get_password_hash(new_password.new_password)
-    # user.verification_token = None  # Invalidate the token after use
-    db.commit()
+        # Update the password
+        hashed_password = auth_manager.get_password_hash(new_password.new_password)
+        user.password = hashed_password
+        # Clear the verification token after use
+        user.verification_token = None
+        db.commit()
 
-    return {"status": "ok", "message": "Password has been reset successfully"}
+        return {"status": "ok", "message": "Password has been reset successfully"}
+    except Exception as e:
+        db.rollback()
+        return {"status": "error", "message": str(e), "data": None}
+    finally:
+        db.close()
 
 
 
