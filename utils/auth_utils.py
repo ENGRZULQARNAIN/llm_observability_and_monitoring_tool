@@ -21,8 +21,8 @@ class AuthManager:
         # Email settings
         self.smtp_server = "smtp.hostinger.com"
         self.smtp_port = 465
-        self.sender_email = "support@sarihorganics.com"
-        self.smtp_password = os.getenv("EMAIL_PASSWORD")
+        self.sender_email = "obamai@sarihorganics.com"
+        self.smtp_password = self.settings.EMAIL_PASSWORD
 
     def verify_password(self, plain_password: str, hashed_password: str) -> bool:
         return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password)
@@ -146,25 +146,25 @@ class AuthManager:
         return body
 
     def _generate_reset_password_email_template(self, good_name: str, reset_token: str) -> str:
-        body = """<!DOCTYPE html>
+        body = f"""<!DOCTYPE html>
         <html>
           <head>
             <style>
-              * {
+              * {{
                 font-family: "Montserrat", sans-serif;
                 color:#000000;
-              }
-              ul li {
+              }}
+              ul li {{
                   margin-bottom:5px;
-              }
-              body {
+              }}
+              body {{
                 font-family: Arial, sans-serif;
                 background-color: #b3daff;
                 color: #000000;
                 font-family: "Montserrat", sans-serif;
                 padding:20px;
-              }
-              .container {
+              }}
+              .container {{
                 max-width: 100%;
                 color: white;
                 margin: 0 auto;
@@ -173,43 +173,46 @@ class AuthManager:
                 background-color: #EFF3EA;
                 border-radius: 5px;
                 box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-              }
-              .footer-like {
+              }}
+              .footer-like {{
                 margin-top: auto;
                 padding: 6px;
                 text-align: center;
-              }
-              .footer-like p {
+              }}
+              .footer-like p {{
                 margin: 0;
                 padding: 4px;
                 color: #fafafa;
                 font-family: "Raleway", sans-serif;
                 letter-spacing: 1px;
-              }
-              .footer-like p a {
+              }}
+              .footer-like p a {{
                 text-decoration: none;
                 font-weight: 600;
-              }
-              .logo {
+              }}
+              .logo {{
                 width: 150px;
                 border:1px solid #8a3aff;
-              }
-              .verify-button {
+              }}
+              .verify-button {{
                 background-color:#8a3aff;
                 border-radius:5px;
                 padding:10px;
                 border: none;
                 text-decoration:none;
-              }
+              }}
             </style>
           </head>
           <body>
             <div class="container">
-              <img src="https://sarihorganics.com/wp-content/uploads/2024/12/Purple_and_White_Modern_AI_Technology_Logo-removebg.png" alt="OBAM-Logo" border="0" class="logo" />
+              <img src="https://sarihorganics.com/wp-content/uploads/2024/12/Purple_and_White_Modern_AI_Technology_Logo-removebg.png" 
+                   alt="OBAM-Logo" border="0" class="logo" />
               <p>Dear {good_name},</p>
-              <h1><strong>Password Reset Link OBAM AI!</strong></h1>
-              <p>Your password reset Link is placed below:</p>
-              <h4><b><a href="{self.base_url}reset-password?token={reset_token}" class="verify-button" style="color:#b3daff;">Click here to Reset your password</a></b></h4>
+              <h1><strong>Password Reset Request - OBAM AI</strong></h1>
+              <p>We received a request to reset your password. Click the button below to set a new password:</p>
+              <h4><b><a href="{self.base_url}update-reset-password/{reset_token}" 
+                   class="verify-button" style="color:#b3daff;">Reset Your Password</a></b></h4>
+              <p>If you didn't request this password reset, you can safely ignore this email.</p>
               <p><b>Sincerely,</b><br />The OBAM AI Team</p>
               <div class="footer-like">
                 <p>
