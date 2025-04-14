@@ -152,7 +152,7 @@ class TestRunner:
         """Evaluate helpfulness using Gemini"""
         messages = [
             SystemMessage(content=helpfullness_prompt),
-            HumanMessage(content=f"FACTS:\n{qa_pair.context}\n\n QUESTION:\n {qa_pair.question}\n\n STUDENT ANSWER:\n{qa_pair.answer}")
+            HumanMessage(content=f"FACTS:\n{qa_pair.context}\n\n QUESTION:\n {qa_pair.question}\n\n STUDENT ANSWER:\n{await self.get_student_answer(qa_pair)}")
         ]
         response = await llm.ainvoke(messages)
         return {
@@ -160,7 +160,25 @@ class TestRunner:
             "explanation": response.content,
             "type": "helpfulness"
         }
-
+    async def get_student_answer(self, qa_pair: QAPair):
+        """Get student answer from MongoDB"""
+        get_payload_info = self._fetch_payload_info_by_project_id()
+        target_url = get_payload_info.target_url
+        end_point = get_payload_info.end_point
+        payload_method = get_payload_info.payload_method
+        payload_body = get_payload_info.payload_body
+        if payload_method == "POST":
+            response = requests.post(target_url + end_point, json=payload_body)
+        elif payload_method == "GET":
+            response = requests.get(target_url + end_point)
+        else:
+            raise ValueError(f"Invalid payload method: {payload_method}")
+        
+        if response.status_code == 200:
+            return str(response.json())
+        else:
+            return None
+        
 
 
 
