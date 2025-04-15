@@ -1,3 +1,4 @@
+import json
 from core.database import SessionLocal, get_mongodb
 from datetime import datetime
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -86,8 +87,6 @@ class TestRunner:
             self.qa_collection = self.mongo_db.qa_collection
             self.test_collection = self.mongo_db.test_results
             
-            # Fetch project data
-            project_data = self._fetch_payload_info_by_project_id()
             
             # Fetch QA pairs
             qa_doc = await self.qa_collection.find_one({"project_id": self.project_id})
@@ -160,24 +159,85 @@ class TestRunner:
             "explanation": response.content,
             "type": "helpfulness"
         }
-    async def get_student_answer(self, qa_pair: QAPair):
+    async def get_student_answer(self, qa_pair=None):
         """Get student answer from MongoDB"""
         get_payload_info = self._fetch_payload_info_by_project_id()
+        
+        if not get_payload_info:
+            logger.error(f"No project found with ID: {self.project_id}")
+            return "Error: Project not found"
+            
         target_url = get_payload_info.target_url
         end_point = get_payload_info.end_point
         payload_method = get_payload_info.payload_method
-        payload_body = get_payload_info.payload_body
-        if payload_method == "POST":
-            response = requests.post(target_url + end_point, json=payload_body)
-        elif payload_method == "GET":
-            response = requests.get(target_url + end_point)
-        else:
-            raise ValueError(f"Invalid payload method: {payload_method}")
         
-        if response.status_code == 200:
-            return str(response.json())
-        else:
-            return None
+        # Process the payload body - handle different formats
+        try:
+            if isinstance(get_payload_info.payload_body, str):
+                # Try to load as JSON, handling different quote styles
+                try:
+                    payload_body = json.loads(get_payload_info.payload_body)
+                except json.JSONDecodeError:
+                    # Try with replaced quotes if standard JSON parsing fails
+                    payload_body = json.loads(get_payload_info.payload_body.replace("'", '"'))
+            else:
+                payload_body = get_payload_info.payload_body
+                
+            # # If we have a QA pair, we can insert the question into the payload body
+            # if qa_pair:
+            #     # Here you can modify the payload to include the question from qa_pair
+            #     # This assumes your payload has a structure like {"messages": [{"human": "question"}]}
+            #     if isinstance(payload_body, dict) and "messages" in payload_body:
+            #         for msg in payload_body["messages"]:
+            #             if "human" in msg:
+            #                 msg["human"] = qa_pair.question
+                
+            # Prepare headers if available
+            headers = {}
+            if hasattr(get_payload_info, 'header_keys') and hasattr(get_payload_info, 'header_values'):
+                if get_payload_info.header_keys and get_payload_info.header_values:
+                    # Parse header keys and values if they're stored as strings
+                    try:
+                        header_keys = json.loads(get_payload_info.header_keys) if isinstance(get_payload_info.header_keys, str) else get_payload_info.header_keys
+                        header_values = json.loads(get_payload_info.header_values) if isinstance(get_payload_info.header_values, str) else get_payload_info.header_values
+                        
+                        if isinstance(header_keys, list) and isinstance(header_values, list) and len(header_keys) == len(header_values):
+                            for i in range(len(header_keys)):
+                                headers[header_keys[i]] = header_values[i]
+                    except Exception as e:
+                        logger.warning(f"Error processing headers: {str(e)}")
+            
+            # Add default content-type if not present
+            if 'Content-Type' not in headers:
+                headers['Content-Type'] = 'application/json'
+                
+            full_url = target_url + end_point
+            print(f"Making {payload_method} request to: {full_url}")
+            print(f"Headers: {headers}")
+            print(f"Payload: {payload_body}")
+            
+            if payload_method == "POST":
+                response = requests.post(full_url, json=payload_body, headers=headers)
+            elif payload_method == "GET":
+                response = requests.get(full_url, headers=headers)
+            else:
+                raise ValueError(f"Invalid payload method: {payload_method}")
+            
+            print(f"Response status code: {response.status_code}")
+            
+            if response.status_code == 200:
+                response_data = response.json()
+                print(f"Response data: {response_data}")
+                return str(response_data)
+            else:
+                print(f"Error response: {response.text}")
+                return f"Error: {response.status_code} - {response.text}"
+                
+        except Exception as e:
+            error_msg = f"Error making request: {str(e)}"
+            logger.error(error_msg)
+            print(error_msg)
+            return error_msg
         
 
 

@@ -72,7 +72,7 @@ application.add_middleware(
 async def read_items():
     return {"message":"OBAM AI: v0.2.1"}
 
-application.include_router(auth_routers.router)
-application.include_router(services.router)
-application.include_router(project_routers.router)
-application.include_router(benchmark_routes.router)
+application.include_router(auth_routers.router, prefix="/api/v1")
+application.include_router(services.router, prefix="/api/v1")
+application.include_router(project_routers.router, prefix="/api/v1")
+application.include_router(benchmark_routes.router, prefix="/api/v1")

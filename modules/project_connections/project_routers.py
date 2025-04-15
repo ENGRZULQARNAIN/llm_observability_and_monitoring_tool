@@ -4,11 +4,83 @@ from core.database import get_db
 from modules.Auth.schemas import AccessToken
 from modules.project_connections.models import Projects
 from modules.Auth.models import Users
-from datetime import UTC
+from datetime import UTC, datetime
 from  modules.project_connections.schemas import ProjectCreate
 from uuid import uuid4
 from core.logger import logger
+import json
+
 router = APIRouter(tags=["PROJECT CONNECTIONS"])
+
+@router.post("/create-project/")
+async def create_project(
+    project: ProjectCreate,
+    token_data: AccessToken,
+    db: Session = Depends(get_db)
+):
+    try:
+        user = db.query(Users).filter(
+            Users.verification_token == token_data.access_token
+        ).first()
+        
+        if not user or not user.isVerified:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid token or unauthorized user"
+            )
+
+        # Convert payload_body to a properly serialized JSON string if needed
+        payload_body = project.payload_body
+        if isinstance(payload_body, dict):
+            payload_body = json.dumps(payload_body)
+        elif isinstance(payload_body, str):
+            # Ensure it's valid JSON if it's a string
+            try:
+                # Parse and re-serialize to ensure proper formatting
+                json_obj = json.loads(payload_body)
+                payload_body = json.dumps(json_obj)
+            except json.JSONDecodeError:
+                # If not valid JSON, keep as is (might be a different format)
+                pass
+
+        new_project = Projects(
+            project_id=str(uuid4()),
+            user_id=user.user_id,
+            project_name=project.project_name,
+            content_type=project.content_type,
+            target_url=project.target_url,
+            payload_method="POST",  # Default method
+            end_point=project.end_point,
+            header_keys=str(project.header_keys),
+            header_values=str(project.header_values),
+            payload_body=payload_body,
+            is_active=project.is_active,
+            test_interval_in_hrs=project.test_interval_in_hrs,
+            benchmark_knowledge_id=project.benchmark_knowledge_id,
+            registered_at=datetime.utcnow()
+        )
+
+        db.add(new_project)
+        db.commit()
+        db.refresh(new_project)
+        
+        logger.info(
+            f"Project created successfully with ID: {new_project.project_id}"
+        )
+        
+        return {
+            "status": "ok",
+            "message": "Project created successfully",
+            "project_id": new_project.project_id
+        }
+
+    except Exception as e:
+        logger.error(f"Error creating project: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+    finally:
+        db.close()
 
 @router.put("/update-project/{project_id}")
 async def update_project(project_id: str, project: ProjectCreate, token_data: AccessToken, db: Session = Depends(get_db)):
