@@ -99,11 +99,10 @@ async def update_project(project_id: str, project: ProjectCreate, token_data: Ac
             raise HTTPException(status_code=401, detail="Unauthorized user")
 
         existing_project.project_name = project.project_name
-        existing_project.payload_type = project.payload_type
-        existing_project.pyload_base_url = project.payload_base_url
-        existing_project.payload_method = project.payload_method
-        existing_project.payload_route = project.payload_route
-        existing_project.payload_headers = project.payload_headers
+        existing_project.content_type = project.content_type
+        existing_project.end_point = project.end_point
+        existing_project.header_keys = str(project.header_keys)
+        existing_project.header_values = str(project.header_values)
         existing_project.payload_body = str(project.payload_body)
         existing_project.is_active = project.is_active
         existing_project.test_interval_in_hrs = project.test_interval_in_hrs
