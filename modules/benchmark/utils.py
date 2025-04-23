@@ -20,7 +20,7 @@ settings = get_settings()
 
 llm = ChatGoogleGenerativeAI(
             model="gemini-2.0-flash-exp",
-            temperature=0.5,
+            temperature=0.2,
             max_tokens=None,
             timeout=None,
             max_retries=0,
@@ -63,11 +63,18 @@ from core.config import get_settings
 settings = get_settings()
 from langsmith import Client
 client = Client(api_key=settings.LANGSMITH_API_KEY)
-prompt = client.pull_prompt("zulqarnain/payload_planner")
+prompt_payload_planner = client.pull_prompt("zulqarnain/payload_planner")
+prompt_helpfullness = client.pull_prompt("helpfullness_prompt_obseravbility")
+prompt_hallucinations = client.pull_prompt("hallucinations_testing")
+
 # print(prompt)
 
 
-chain = prompt | llm
+payload_planner_chain = prompt_payload_planner | llm
+helpfullness_chain = prompt_helpfullness | llm
+hallucinations_chain = prompt_hallucinations | llm
+
+
 
 # answer = chain.invoke(input="""{
 #     "messages": [
@@ -157,16 +164,11 @@ class TestRunner:
     
     async def _run_test_for_hallucinations(self, qa_pair: QAPair):
         """Evaluate hallucination using Gemini"""
-        messages = [
-            SystemMessage(content=hallucination_prompt),
-            HumanMessage(content=f"FACTS:\n{qa_pair.context}\n\n QUESTION:\n {qa_pair.question}\n\n STUDENT ANSWER:\n{qa_pair.answer}")
-        ]
-        response = await llm.ainvoke(messages)
-        return {
-            "score": 1 if "score: 1" in response.content.lower() else 0,
-            "explanation": response.content,
-            "type": "hallucination"
-        }
+        # messages = [
+        #     SystemMessage(content=hallucination_prompt),
+        #     HumanMessage(content=f"QUESTION:\n {qa_pair.question}\n\n FACTUAL ANSWER:\n{qa_pair.answer}\n\n STUDENT ANSWER:\n{await self.get_student_answer(qa_pair)}")
+        # ]
+        
 
     async def _run_test_for_helpfullness(self, qa_pair: QAPair):
         """Evaluate helpfulness using Gemini"""
@@ -183,83 +185,17 @@ class TestRunner:
     async def get_student_answer(self, qa_pair=None):
         """Get student answer from MongoDB"""
         get_payload_info = self._fetch_payload_info_by_project_id()
-        
-        if not get_payload_info:
-            logger.error(f"No project found with ID: {self.project_id}")
-            return "Error: Project not found"
-            
-        target_url = get_payload_info.target_url
-        end_point = get_payload_info.end_point
-        payload_method = get_payload_info.payload_method
-        
-        # Process the payload body - handle different formats
-        try:
-            if isinstance(get_payload_info.payload_body, str):
-                # Try to load as JSON, handling different quote styles
-                try:
-                    payload_body = json.loads(get_payload_info.payload_body)
-                except json.JSONDecodeError:
-                    # Try with replaced quotes if standard JSON parsing fails
-                    payload_body = json.loads(get_payload_info.payload_body.replace("'", '"'))
-            else:
-                payload_body = get_payload_info.payload_body
-                
-            # # If we have a QA pair, we can insert the question into the payload body
-            # if qa_pair:
-            #     # Here you can modify the payload to include the question from qa_pair
-            #     # This assumes your payload has a structure like {"messages": [{"human": "question"}]}
-            #     if isinstance(payload_body, dict) and "messages" in payload_body:
-            #         for msg in payload_body["messages"]:
-            #             if "human" in msg:
-            #                 msg["human"] = qa_pair.question
-                
-            # Prepare headers if available
-            headers = {}
-            if hasattr(get_payload_info, 'header_keys') and hasattr(get_payload_info, 'header_values'):
-                if get_payload_info.header_keys and get_payload_info.header_values:
-                    # Parse header keys and values if they're stored as strings
-                    try:
-                        header_keys = json.loads(get_payload_info.header_keys) if isinstance(get_payload_info.header_keys, str) else get_payload_info.header_keys
-                        header_values = json.loads(get_payload_info.header_values) if isinstance(get_payload_info.header_values, str) else get_payload_info.header_values
-                        
-                        if isinstance(header_keys, list) and isinstance(header_values, list) and len(header_keys) == len(header_values):
-                            for i in range(len(header_keys)):
-                                headers[header_keys[i]] = header_values[i]
-                    except Exception as e:
-                        logger.warning(f"Error processing headers: {str(e)}")
-            
-            # Add default content-type if not present
-            if 'Content-Type' not in headers:
-                headers['Content-Type'] = 'application/json'
-                
-            full_url = target_url + end_point
-            print(f"Making {payload_method} request to: {full_url}")
-            print(f"Headers: {headers}")
-            print(f"Payload: {payload_body}")
-            
-            if payload_method == "POST":
-                response = requests.post(full_url, json=payload_body, headers=headers)
-            elif payload_method == "GET":
-                response = requests.get(full_url, headers=headers)
-            else:
-                raise ValueError(f"Invalid payload method: {payload_method}")
-            
-            print(f"Response status code: {response.status_code}")
-            
-            if response.status_code == 200:
-                response_data = response.json()
-                print(f"Response data: {response_data}")
-                return str(response_data)
-            else:
-                print(f"Error response: {response.text}")
-                return f"Error: {response.status_code} - {response.text}"
-                
-        except Exception as e:
-            error_msg = f"Error making request: {str(e)}"
-            logger.error(error_msg)
-            print(error_msg)
-            return error_msg
-        
+        # Convert project data to a payload configuration
+        payload_config = {
+            "target_url": get_payload_info.target_url,
+            "end_point": get_payload_info.end_point,
+            "payload_method": get_payload_info.payload_method,
+            "body": get_payload_info.payload_body
+        }
+        payload_planner = PayloadPlanner(payload_config)
+        payload_planner.set_question_field_path(["messages", 0, "content"])
+        response = await payload_planner.send_payload(qa_pair.question)
+        return response
 
 class PayloadPlanner:
     """
