@@ -1,4 +1,5 @@
 import json
+import uuid
 from core.database import SessionLocal, get_mongodb
 from datetime import datetime
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -8,6 +9,7 @@ from core.config import Settings, get_settings
 from langchain_core.messages import SystemMessage, HumanMessage
 from modules.benchmark.qa_pair import QAPair
 import requests
+from modules.monitor.models import TestInfo
 from modules.project_connections.models import Projects
 from sqlalchemy.orm import Session
 from sqlalchemy import select
@@ -28,37 +30,6 @@ llm = ChatGoogleGenerativeAI(
         )
 
 
-
-hallucination_prompt = """
-You are a teacher grading a quiz. 
-You will be given FACTS, STUDENT QUESTION  and a STUDENT ANSWER. 
-Here is the grade criteria to follow:
-(1) Ensure the STUDENT ANSWER is grounded in the FACTS. 
-(2) Ensure the STUDENT ANSWER does not contain "hallucinated" information outside the scope of the FACTS.
-Score:
-A score of 1 means that the student's answer meets all of the criteria. This is the highest (best) score. 
-A score of 0 means that the student's answer does not meet all of the criteria. This is the lowest possible score you can give.
-Explain your reasoning in a step-by-step manner to ensure your reasoning and conclusion are correct. 
-Avoid simply stating the correct answer at the outset.
-"""
-
-helpfullness_prompt = """ 
-You are a teacher grading a quiz. 
-
-You will be given a QUESTION and a STUDENT ANSWER. 
-
-Here is the grade criteria to follow:
-(1) Ensure the STUDENT ANSWER is concise and relevant to the QUESTION
-(2) Ensure the STUDENT ANSWER helps to answer the QUESTION
-
-Score:
-A score of 1 means that the student's answer meets all of the criteria. This is the highest (best) score. 
-A score of 0 means that the student's answer does not meet all of the criteria. This is the lowest possible score you can give.
-
-Explain your reasoning in a step-by-step manner to ensure your reasoning and conclusion are correct. 
-
-Avoid simply stating the correct answer at the outset.
-"""
 from core.config import get_settings
 settings = get_settings()
 from langsmith import Client
@@ -123,38 +94,18 @@ class TestRunner:
                 return []
                 
             qa_pairs = [QAPair(**qa) for qa in qa_doc.get("qa_pairs", [])]
-            
+            user_id = qa_doc.get("user_id")
             # Run tests
             results = []
             for qa in qa_pairs:
-                hallucination = await self._run_test_for_hallucinations(qa)
-                helpfulness = await self._run_test_for_helpfullness(qa)
-                results.extend([hallucination, helpfulness])
-            
-            # Store results
-            await self.test_collection.insert_one({
-                "project_id": self.project_id,
-                "results": results,
-                "timestamp": datetime.utcnow()
-            })
-            
-            # Update test info in SQL database
-            from modules.monitor.models import TestInfo
-            test_info = self.db.execute(select(TestInfo).filter(TestInfo.project_id == self.project_id)).first()
-            if test_info:
-                test_info = test_info[0]  # Extract from result proxy
-                test_info.last_test_conducted = datetime.utcnow()
-            else:
-                # Create new test info
-                test_info = TestInfo(
-                    project_id=self.project_id,
-                    last_test_conducted=datetime.utcnow()
-                )
-                self.db.add(test_info)
-            
-            self.db.commit()
-            return results
-            
+                student_answer = await self.get_student_answer(qa)
+                if student_answer:
+                    hallucination = await self._run_test_for_hallucinations(qa,student_answer)
+                    helpfulness = await self._run_test_for_helpfullness(qa,student_answer)
+                    results.append({"question":qa.question,"student_answer":student_answer,"hallucination":hallucination,"helpfulness":helpfulness})
+            self.add_results(results, user_id)
+            logger.info(f"Results added for project {self.project_id}")
+
         except Exception as e:
             logger.error(f"Error in TestRunner.run: {str(e)}")
             raise
@@ -162,219 +113,145 @@ class TestRunner:
             if self.db:
                 self.db.close()
     
-    async def _run_test_for_hallucinations(self, qa_pair: QAPair):
-        """Evaluate hallucination using Gemini"""
-        # messages = [
-        #     SystemMessage(content=hallucination_prompt),
-        #     HumanMessage(content=f"QUESTION:\n {qa_pair.question}\n\n FACTUAL ANSWER:\n{qa_pair.answer}\n\n STUDENT ANSWER:\n{await self.get_student_answer(qa_pair)}")
-        # ]
         
-
-    async def _run_test_for_helpfullness(self, qa_pair: QAPair):
-        """Evaluate helpfulness using Gemini"""
-        messages = [
-            SystemMessage(content=helpfullness_prompt),
-            HumanMessage(content=f"FACTS:\n{qa_pair.context}\n\n QUESTION:\n {qa_pair.question}\n\n STUDENT ANSWER:\n{await self.get_student_answer(qa_pair)}")
-        ]
-        response = await llm.ainvoke(messages)
-        return {
-            "score": 1 if "score: 1" in response.content.lower() else 0,
-            "explanation": response.content,
-            "type": "helpfulness"
-        }
     async def get_student_answer(self, qa_pair=None):
         """Get student answer from MongoDB"""
         get_payload_info = self._fetch_payload_info_by_project_id()
         # Convert project data to a payload configuration
+        student_answer = None
         payload_config = {
             "target_url": get_payload_info.target_url,
             "end_point": get_payload_info.end_point,
             "payload_method": get_payload_info.payload_method,
-            "body": get_payload_info.payload_body
+            "body": get_payload_info.payload_body,
+            "headers": get_payload_info.payload_headers
         }
-        payload_planner = PayloadPlanner(payload_config)
-        payload_planner.set_question_field_path(["messages", 0, "content"])
-        response = await payload_planner.send_payload(qa_pair.question)
-        return response
+        prepare_payload = await self.prepare_payload(payload_config.get("body"),user_query="Hi this is dummy query")
+        payload_config["body"] = prepare_payload
+        test_response = await trigger_payload(payload_config)
+        if test_response[0]:
 
-class PayloadPlanner:
-    """
-    Class for preparing and sending API payloads with customizable structure
-    """
-    def __init__(self, raw_payload: Dict):
-        """
-        Initialize the PayloadPlanner
-        
-        Args:
-            raw_payload: Dictionary containing payload configuration
-        """
-        self.raw_payload = raw_payload
-        self.is_payload_passed = False
-        self.passed_payload = None
-        self.question_field_path = None  # Path to the question field
-    
-    def set_question_field_path(self, path: List[Union[str, int]]):
-        """
-        Explicitly set the path to the question field in the payload
-        
-        Args:
-            path: List representing path to question field (e.g. ["messages", 0, "content"])
-        """
-        self.question_field_path = path
-        return self
-    
-    async def prepare_payload(self, question: Optional[str] = None) -> tuple:
-        """
-        Prepare the payload for sending, with optional question insertion
-        
-        Args:
-            question: The question or prompt to insert in the payload
-            
-        Returns:
-            tuple: (field_name, prepared_payload)
-        """
-        try:
-            # Parse the payload body from raw_payload
-            body = self.raw_payload.get("body", {})
-            if isinstance(body, str):
-                try:
-                    payload = json.loads(body)
-                except json.JSONDecodeError:
-                    # Try with replaced quotes if standard JSON parsing fails
-                    payload = json.loads(body.replace("'", '"'))
+            final_payload = await self.prepare_payload(payload_config.get("body"),user_query=qa_pair.question)
+            payload_config["body"] = final_payload
+            test_response = await trigger_payload(payload_config)
+
+            if test_response[0]:
+                student_answer = test_response[1]
             else:
-                payload = body
-            
-            # Make a copy of the payload to avoid modifying the original
-            payload_copy = copy.deepcopy(payload)
-            
-            # If we have a question to insert and a path for it
-            field_name = None
-            if question and self.question_field_path:
-                # Navigate to the correct position in the payload
-                current = payload_copy
-                for i, key in enumerate(self.question_field_path):
-                    if i == len(self.question_field_path) - 1:
-                        # We've reached the final position, insert the question
-                        current[key] = question
-                        field_name = key
-                    else:
-                        # Keep traversing
-                        if key not in current:
-                            # Create nested dictionary if needed
-                            if isinstance(self.question_field_path[i+1], int):
-                                current[key] = []  # Next key is an index, so create a list
-                            else:
-                                current[key] = {}  # Next key is a string, so create a dict
-                        current = current[key]
-            
-            # Store the prepared payload
-            self.prepared_payload = payload_copy
-            return field_name, payload_copy
-        
-        except Exception as e:
-            logger.error(f"Error preparing payload: {str(e)}")
-            return None, None
-    
-    async def send_payload(self, question: Optional[str] = None) -> Dict[str, Any]:
-        """
-        Prepare and send the payload to the target endpoint
-        
-        Args:
-            question: Optional question to insert in the payload
-            
-        Returns:
-            Dict: Response data or error information
-        """
-        try:
-            # Prepare the payload
-            field_name, payload = await self.prepare_payload(question)
-            if not payload:
-                return {"error": "Failed to prepare payload"}
-            
-            # Extract target information from raw_payload
-            target_url = self.raw_payload.get("target_url", "")
-            endpoint = self.raw_payload.get("end_point", "")
-            method = self.raw_payload.get("payload_method", "POST")
-            
-            # Prepare headers
-            headers = {'Content-Type': 'application/json'}
-            if self.raw_payload.get("headers"):
-                headers.update(self.raw_payload.get("headers"))
-            
-            # Log request details
-            url = target_url + endpoint
-            logger.info(f"Sending {method} request to: {url}")
-            logger.info(f"Headers: {headers}")
-            logger.info(f"Payload: {payload}")
-            
-            # Send the request
-            if method.upper() == "POST":
-                response = requests.post(url, json=payload, headers=headers)
-            elif method.upper() == "GET":
-                response = requests.get(url, headers=headers)
-            else:
-                return {"error": f"Unsupported method: {method}"}
-            
-            # Process the response
-            status_code = response.status_code
-            if status_code == 200:
-                # Success
-                try:
-                    response_data = response.json()
-                    self.is_payload_passed = True
-                    self.passed_payload = payload
-                    return response_data
-                except Exception as e:
-                    # Response was not JSON
-                    return {"status_code": status_code, "content": response.text}
-            else:
-                # Error
-                return {
-                    "status_code": status_code,
-                    "error": f"Request failed with status {status_code}",
-                    "details": response.text
-                }
-                
-        except Exception as e:
-            logger.error(f"Error sending payload: {str(e)}")
-            return {"error": str(e)}
-    
-    async def try_payload_variations(self, question: Optional[str] = None) -> Dict[str, Any]:
-        """
-        Try different variations of the payload and endpoint format
-        
-        Args:
-            question: Optional question to insert in the payload
-            
-        Returns:
-            Dict: Response from the successful attempt or error information
-        """
-        # Try with and without trailing slash in endpoint
-        original_endpoint = self.raw_payload.get("end_point", "")
-        
-        # First attempt - original endpoint
-        logger.info(f"Trying original endpoint: {original_endpoint}")
-        result = await self.send_payload(question)
-        if result.get("status_code") == 200 or not result.get("error"):
-            return result
-        
-        # Second attempt - toggle trailing slash
-        if original_endpoint.endswith('/'):
-            self.raw_payload["end_point"] = original_endpoint[:-1]
+                student_answer = None
+
         else:
-            self.raw_payload["end_point"] = original_endpoint + "/"
-            
-        logger.info(f"Trying alternative endpoint: {self.raw_payload['end_point']}")
-        result = await self.send_payload(question)
-        
-        # Restore original endpoint
-        self.raw_payload["end_point"] = original_endpoint
-        return result
+            print(f"Error in trigger_payload: {test_response}")
+            student_answer = None
 
-    async def get_payload_plan():
-        pass
-    async def get_payload_plan_by_project_id():
-        pass
-    async def get_payload_plan_by_project_id():
-        pass
+        return student_answer
+    
+    async def prepare_payload(payload_infor, user_query="Hi this is dummy query"):
+        ans = payload_planner_chain.invoke({"question": f"user query: {user_query}, payload: "
+                f"{payload_infor}"
+        })
+        final_payload = ans[0].get("args").get("final_payload")
+        # Convert Python-style string dict to proper JSON
+        if final_payload and isinstance(final_payload, str):
+            # Use ast.literal_eval to safely evaluate the string as a Python literal
+            import ast
+            try:
+                # Convert Python dict string to actual dict
+                python_dict = ast.literal_eval(final_payload)
+                # Convert the dict to proper JSON
+                final_payload = json.dumps(python_dict)
+                # Now parse it back to get the Python object
+                final_payload = json.loads(final_payload)
+            except (SyntaxError, ValueError) as e:
+                # Fallback if the string cannot be parsed
+                print(f"Error processing payload: {e}")
+
+
+                return final_payload
+
+    async def _run_test_for_hallucinations(self, qa_pair=None,student_answer=None):
+        hallucination = hallucinations_chain.invoke({"question":qa_pair.question,"facts":qa_pair.answer,"answer":student_answer,})
+        return hallucination[0].get("args").get("hallucination")
+
+    async def _run_test_for_helpfullness(self, qa_pair=None,student_answer=None):
+        helpfulness = helpfullness_chain.invoke({"question": qa_pair.question,"student_answer": student_answer})
+        return helpfulness[0].get("args").get("Helpful")
+    
+    def add_results(self, results, user_id):
+        db = SessionLocal()
+        try:
+            test_info_objects = [
+                TestInfo(
+                    test_id=str(uuid.uuid4()),
+                    project_id=self.project_id,
+                    user_id=user_id,
+                    question=result["question"],
+                    student_answer=result["student_answer"],
+                    hallucination=result["hallucination"],
+                    helpfulness=result["helpfulness"],
+                    last_test_conducted=datetime.utcnow(),
+                    test_status= 1 if result["hallucination"] < 0.5 and result["helpfulness"] > 0.5 else 0
+                )
+                for result in results
+            ]
+            db.add_all(test_info_objects)
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Error adding test results: {str(e)}")
+        finally:
+            db.close()
+
+async def trigger_payload(payload_config):
+    """Test payload
+    
+    Args:
+        payload_config (dict): Dictionary containing payload configuration
+            with keys: target_url, end_point, payload_method, body, headers
+            
+    Returns:
+        bool: True if request is successful (status 200), False otherwise
+    """
+    try:
+        import requests
+        
+        url = f"{payload_config['target_url']}{payload_config['end_point']}"
+        method = payload_config['payload_method'].lower()
+        headers = payload_config.get('headers', {})
+        body = payload_config.get('body', {})
+        
+        if isinstance(headers, str):
+            try:
+                headers = json.loads(headers)
+            except json.JSONDecodeError:
+                headers = {}
+                
+        if isinstance(body, str):
+            try:
+                body = json.loads(body)
+            except json.JSONDecodeError:
+                pass
+        
+        response = None
+        if method == 'get':
+            response = requests.get(url, headers=headers, params=body)
+        elif method == 'post':
+            response = requests.post(url, headers=headers, json=body)
+        elif method == 'put':
+            response = requests.put(url, headers=headers, json=body)
+        elif method == 'delete':
+            response = requests.delete(url, headers=headers, json=body)
+        elif method == 'patch':
+            response = requests.patch(url, headers=headers, json=body)
+            
+        if response and response.status_code == 200:
+            print(f"the response is {response.content}")
+            return True,response.content
+        return False,None
+    except Exception as e:
+        logger.error(f"Error in trigger_payload: {str(e)}")
+        return False,None
+
+
+
+{'messages': [{'human': 'hey_val_ai'}]}

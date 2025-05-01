@@ -18,3 +18,5 @@ class TestInfo(Base):
     hallucination_score = Column(Float, nullable=True)
     helpfullness_score = Column(Float, nullable=True)
     last_test_conducted = Column(DateTime, default=datetime.utcnow)
+    question = Column(String, nullable=False)
+    student_answer = Column(String, nullable=False)
