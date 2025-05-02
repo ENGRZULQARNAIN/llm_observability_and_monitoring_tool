@@ -124,14 +124,14 @@ class TestRunner:
             "end_point": get_payload_info.end_point,
             "payload_method": get_payload_info.payload_method,
             "body": get_payload_info.payload_body,
-            "headers": get_payload_info.payload_headers
+            "headers": {"Content-Type": "application/json"}
         }
-        prepare_payload = await self.prepare_payload(payload_config.get("body"),user_query="Hi this is dummy query")
+        prepare_payload = await self.prepare_payload(str(payload_config.get("body")), user_query="Hi this is dummy query")
         payload_config["body"] = prepare_payload
         test_response = await trigger_payload(payload_config)
         if test_response[0]:
 
-            final_payload = await self.prepare_payload(payload_config.get("body"),user_query=qa_pair.question)
+            final_payload = await self.prepare_payload(str(payload_config.get("body")),user_query=str(qa_pair.question))
             payload_config["body"] = final_payload
             test_response = await trigger_payload(payload_config)
 
@@ -146,7 +146,7 @@ class TestRunner:
 
         return student_answer
     
-    async def prepare_payload(payload_infor, user_query="Hi this is dummy query"):
+    async def prepare_payload(self, payload_infor, user_query="Hi this is dummy query"):
         ans = payload_planner_chain.invoke({"question": f"user query: {user_query}, payload: "
                 f"{payload_infor}"
         })
@@ -168,6 +168,7 @@ class TestRunner:
 
 
                 return final_payload
+        return final_payload
 
     async def _run_test_for_hallucinations(self, qa_pair=None,student_answer=None):
         hallucination = hallucinations_chain.invoke({"question":qa_pair.question,"facts":qa_pair.answer,"answer":student_answer,})
