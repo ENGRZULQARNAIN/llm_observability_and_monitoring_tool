@@ -117,15 +117,34 @@ class TestRunner:
     async def get_student_answer(self, qa_pair=None):
         """Get student answer from MongoDB"""
         get_payload_info = self._fetch_payload_info_by_project_id()
+        
+        # Check if get_payload_info exists
+        if get_payload_info is None:
+            logger.error(f"No payload information found for project {self.project_id}")
+            return None
+            
         # Convert project data to a payload configuration
         student_answer = None
+        
+        # Default to POST if payload_method is None
+        payload_method = get_payload_info.payload_method
+        if payload_method is None:
+            payload_method = "post"
+            logger.warning(f"No payload_method specified for project {self.project_id}, defaulting to POST")
+            
         payload_config = {
             "target_url": get_payload_info.target_url,
             "end_point": get_payload_info.end_point,
-            "payload_method": get_payload_info.payload_method,
+            "payload_method": payload_method,
             "body": get_payload_info.payload_body,
             "headers": {"Content-Type": "application/json"}
         }
+        
+        # Check for other required fields
+        if not get_payload_info.target_url or not get_payload_info.end_point:
+            logger.error(f"Missing target_url or end_point for project {self.project_id}")
+            return None
+            
         prepare_payload = await self.prepare_payload(str(payload_config.get("body")), user_query="Hi this is dummy query")
         payload_config["body"] = prepare_payload
         test_response = await trigger_payload(payload_config)
@@ -147,10 +166,27 @@ class TestRunner:
         return student_answer
     
     async def prepare_payload(self, payload_infor, user_query="Hi this is dummy query"):
+        # Check if payload_infor is None
+        if payload_infor is None:
+            logger.warning("payload_infor is None, using empty dict")
+            return {}
+            
         ans = payload_planner_chain.invoke({"question": f"user query: {user_query}, payload: "
                 f"{payload_infor}"
         })
-        final_payload = ans[0].get("args").get("final_payload")
+        
+        # Check if ans is properly returned
+        if not ans or not isinstance(ans, list) or not ans[0] or not isinstance(ans[0], dict):
+            logger.warning("Invalid response from payload_planner_chain")
+            return {}
+            
+        final_payload = ans[0].get("args", {}).get("final_payload")
+        
+        # Check if final_payload exists
+        if final_payload is None:
+            logger.warning("final_payload is None, using empty dict")
+            return {}
+            
         # Convert Python-style string dict to proper JSON
         if final_payload and isinstance(final_payload, str):
             # Use ast.literal_eval to safely evaluate the string as a Python literal
@@ -164,9 +200,7 @@ class TestRunner:
                 final_payload = json.loads(final_payload)
             except (SyntaxError, ValueError) as e:
                 # Fallback if the string cannot be parsed
-                print(f"Error processing payload: {e}")
-
-
+                logger.warning(f"Error processing payload: {e}")
                 return final_payload
         return final_payload
 
@@ -216,6 +250,16 @@ async def trigger_payload(payload_config):
     try:
         import requests
         
+        # Check if required fields exist
+        if not all(key in payload_config for key in ['target_url', 'end_point', 'payload_method']):
+            logger.error("Missing required fields in payload_config")
+            return False, None
+        
+        # Check if payload_method is None
+        if payload_config['payload_method'] is None:
+            logger.error("payload_method cannot be None")
+            return False, None
+            
         url = f"{payload_config['target_url']}{payload_config['end_point']}"
         method = payload_config['payload_method'].lower()
         headers = payload_config.get('headers', {})
