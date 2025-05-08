@@ -133,7 +133,7 @@ class AuthManager:
               <p>Dear {good_name},</p>
               <h1><strong>Welcome to the OBAM AI!</strong></h1>
               <p>Your Account Verification Link is placed below. Click on the link to get verified:</p>
-              <h4><b><a href="{self.base_url}verify?token={verification_token}" class="verify-button" style="color:#b3daff;">Click here to Verify Your Account</a></b></h4>
+              <h4><b><a href="{self.base_url}/api/v1/verify/?token={verification_token}" class="verify-button" style="color:#b3daff;">Click here to Verify Your Account</a></b></h4>
               <p><b>Sincerely,</b><br />The OBAM AI Team</p>
               <div class="footer-like">
                 <p>
