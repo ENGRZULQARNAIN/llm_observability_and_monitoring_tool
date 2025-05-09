@@ -41,10 +41,10 @@ async def startup_event():
         # Initialize your startup tasks here
         logger.info("Starting OBAM AI application...")
         # create_tables()
-        logger.info("Starting project monitoror as a background task...")
+        # logger.info("Starting project monitoror as a background task...")
         # Create the background task properly
-        asyncio.create_task(scheduled_project_monitoror())
-        logger.info("OBAM AI application started successfully")
+        # asyncio.create_task(scheduled_project_monitoror())
+        # logger.info("OBAM AI application started successfully")
     except Exception as e:
         logger.error(f"Startup error: {e}")
 
