@@ -6,6 +6,7 @@ from modules.monitor.models import TestInfo
 from core.logger import logger
 from core.database import get_db, SessionLocal
 from modules.benchmark.utils import TestRunner
+import asyncio
 
 async def project_monitoror():
     """
@@ -21,6 +22,9 @@ async def project_monitoror():
         current_time = datetime.utcnow()
         db = SessionLocal()
         projects = db.query(Projects).all()
+        
+        # Create a list to store all test runner tasks
+        test_tasks = []
         
         for project in projects:
             if project.is_active:
@@ -40,13 +44,21 @@ async def project_monitoror():
                         should_test = True
                 
                 if should_test:
-                    # Create and run test runner
+                    # Create test runner and add to tasks list
                     test_runner = TestRunner(project.project_id)
-                    try:
-                        await test_runner.run()
-                        logger.info(f"Tests completed for project {project.project_name}")
-                    except Exception as e:
-                        logger.error(f"Error running tests for project {project.project_name}: {str(e)}")
+                    # Add task to our list
+                    test_tasks.append(
+                        run_test_with_timeout(test_runner, project.project_name)
+                    )
+        
+        # Run all test tasks concurrently if there are any
+        if test_tasks:
+            logger.info(f"Running {len(test_tasks)} test tasks concurrently")
+            # Wait for all tasks to complete, with a maximum timeout
+            await asyncio.gather(*test_tasks, return_exceptions=True)
+            logger.info("All test tasks completed")
+        else:
+            logger.info("No projects require testing at this time")
         
         return projects
     except Exception as e:
@@ -56,3 +68,27 @@ async def project_monitoror():
     finally:
         if db:
             db.close()
+
+async def run_test_with_timeout(test_runner, project_name, timeout_seconds=300):
+    """
+    Run a test with a timeout to prevent it from blocking indefinitely.
+    
+    Args:
+        test_runner: The TestRunner instance
+        project_name: Name of the project for logging
+        timeout_seconds: Maximum time to allow for the test to run
+        
+    Returns:
+        Result of the test or None if timed out
+    """
+    try:
+        # Run the test with a timeout
+        result = await asyncio.wait_for(test_runner.run(), timeout=timeout_seconds)
+        logger.info(f"Tests completed for project {project_name}")
+        return result
+    except asyncio.TimeoutError:
+        logger.warning(f"Test for project {project_name} timed out after {timeout_seconds} seconds")
+        return None
+    except Exception as e:
+        logger.error(f"Error running tests for project {project_name}: {str(e)}")
+        return None
