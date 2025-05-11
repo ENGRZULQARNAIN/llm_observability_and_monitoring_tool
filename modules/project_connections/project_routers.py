@@ -193,3 +193,41 @@ async def all_projects(token_data: AccessToken, db: Session = Depends(get_db)):
 
     finally:
         db.close()
+
+from enum import Enum
+class Status(str, Enum):
+    ACTIVATE = "activate"
+    DEACTIVATE = "deactivate"
+
+@router.post("/activate-project/{project_id}")
+async def activate_project(project_id: str, status: Status, token_data: AccessToken, db: Session = Depends(get_db)):
+    try:
+        user = db.query(Users).filter(Users.verification_token == token_data.access_token).first()
+        
+        if not user or not user.isVerified:
+            raise HTTPException(status_code=401, detail="Invalid token or unauthorized user")
+
+        existing_project = db.query(Projects).filter(Projects.project_id == project_id).first()
+        
+        if not existing_project:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        if existing_project.user_id!= user.user_id:
+            raise HTTPException(status_code=401, detail="Unauthorized user")
+        if status == "deactivate":
+            existing_project.is_active = False
+        elif status == "activate":
+            existing_project.is_active = True
+        db.commit()
+        db.refresh(existing_project)
+        logger.info(f"Project with ID {project_id} activated successfully")
+
+        return {"status": "ok", "message": "Project activated successfully"}
+
+    except Exception as e:
+        logger.error(f"Error activating project: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+    finally:
+        db.close()
