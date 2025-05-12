@@ -216,13 +216,15 @@ async def activate_project(project_id: str, status: Status, token_data: AccessTo
             raise HTTPException(status_code=401, detail="Unauthorized user")
         if status == "deactivate":
             existing_project.is_active = False
+            message = "Project deactivated successfully"
         elif status == "activate":
             existing_project.is_active = True
+            message = "Project activated successfully"
         db.commit()
         db.refresh(existing_project)
         logger.info(f"Project with ID {project_id} activated successfully")
 
-        return {"status": "ok", "message": "Project activated successfully"}
+        return {"status": "ok", "message": message}
 
     except Exception as e:
         logger.error(f"Error activating project: {str(e)}")
