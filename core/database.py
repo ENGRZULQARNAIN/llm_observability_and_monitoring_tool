@@ -5,6 +5,7 @@ from .config import Settings, get_settings
 from motor.motor_asyncio import AsyncIOMotorClient
 from typing import Annotated
 from fastapi import Depends
+from core.logger import logger
 
 Base = declarative_base()
 settings = Settings()
@@ -29,8 +30,9 @@ async def get_mongodb(settings=None):
     if settings is None:
         from core.config import get_settings
         settings = get_settings()
-
-    client = AsyncIOMotorClient(settings.MONGODB_URL)
+    print(f"MongoDB URL: {settings.MONGODB_URL}")
+    print(f"MongoDB DB: {settings.MONGODB_DB}")
+    client = AsyncIOMotorClient("mongodb://localhost:27017")
     db = client[settings.MONGODB_DB]
     return db
     # return AsyncIOMotorClient(settings.MONGODB_URL)[settings.MONGODB_DB]

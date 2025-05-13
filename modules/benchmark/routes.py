@@ -575,3 +575,72 @@ async def get_project_status(
     status_doc["_id"] = str(status_doc["_id"])
     
     return JSONResponse(content=status_doc)
+
+
+@router.get(
+    "/qa_data/{project_id}",
+    summary="Download QA pairs for a project",
+    description="Download the generated QA pairs as a JSON file"
+)
+async def download_qa_pairs(
+    project_id: str,
+    db: Session = Depends(get_db),
+    mongo_db: AsyncIOMotorClient = Depends(get_mongodb)
+):
+    """
+    Download QA pairs for a benchmark project.
+    
+    Args:
+        project_id: Project ID to download
+        db: SQL database session
+        mongo_db: MongoDB connection
+        
+    Returns:
+        JSON file with QA pairs
+    """
+    # Get project
+    # project = db.query(Projects).filter(
+    #     Projects.project_id == project_id
+    # ).first()
+    
+    # if not project:
+    #     raise HTTPException(
+    #         status_code=status.HTTP_404_NOT_FOUND,
+    #         detail="Project not found"
+    #     )
+    
+    # Get QA pairs from MongoDB
+    qa_doc = await mongo_db.qa_collection.find_one(
+        {"project_id": project_id}
+    )
+
+    
+    if not qa_doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="QA pairs not found for this project"
+        )
+    
+    
+    # Get QA pairs and convert datetime objects to strings
+    qa_pairs = qa_doc.get("qa_pairs", [])
+    serializable_qa_pairs = []
+    
+    for qa_pair in qa_pairs:
+        # Create a copy of the QA pair that we can modify
+        serializable_pair = dict(qa_pair)
+        
+        # Convert datetime to string if present
+        if "generated_at" in serializable_pair and isinstance(serializable_pair["generated_at"], datetime):
+            serializable_pair["generated_at"] = serializable_pair["generated_at"].isoformat()
+            
+        serializable_qa_pairs.append(serializable_pair)
+    
+    num_qa_pairs = len(serializable_qa_pairs)
+    
+    return JSONResponse(
+        content={
+        "qa": serializable_qa_pairs,
+        "num_qa_pairs": num_qa_pairs,
+        }
+    )
