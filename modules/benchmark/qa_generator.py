@@ -7,16 +7,16 @@ from datetime import datetime
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.output_parsers import PydanticOutputParser
 from motor.motor_asyncio import AsyncIOMotorClient
-
+from typing_extensions import Literal
 from core.config import Settings
 
 class QuestionAnswer(BaseModel):
     question: str = Field(..., description="The generated question")
     answer: str = Field(..., description="The correct answer to the question")
+    difficulty_level: Literal["easy", "medium", "hard"] = Field(default="easy", description="The difficulty level of the question")
 
 class QAResponse(BaseModel):
     questions: List[QuestionAnswer]
-    context: str
 
 class QAPrompt(BaseModel):
     system_prompt: str = Field(
@@ -29,10 +29,10 @@ class QAPrompt(BaseModel):
     "questions": [
         {
             "question": "question text here",
-            "answer": "answer text here"
+            "answer": "answer text here",
+            "difficulty_level": "easy/medium/hard"
         }
-    ],
-    "context": "input context here"
+    ]
 }""",
     )
     
@@ -87,8 +87,7 @@ class QAGenerator:
                 db_qa = QAPair(
                     question=qa.question,
                     answer=qa.answer,
-                    context=context,
-                    generated_at=datetime.utcnow()
+                    defficulty_level=qa.difficulty_level
                 )
                 qa_pairs.append(db_qa)  # Store in list instead of inserting into DB
 
