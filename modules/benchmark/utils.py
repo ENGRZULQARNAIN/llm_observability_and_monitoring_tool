@@ -84,26 +84,30 @@ class TestRunner:
             client = AsyncIOMotorClient(settings.MONGODB_URL)
             self.mongo_db = client[settings.MONGODB_DB]
             self.qa_collection = self.mongo_db.qa_collection
-            self.test_collection = self.mongo_db.test_results
+            self.test_collection = self.mongo_db.test_collection
             
             
             # Fetch QA pairs
-            qa_doc = await self.qa_collection.find_one({"project_id": self.project_id})
+            qa_doc = await self.test_collection.find_one({"project_id": self.project_id})
             if not qa_doc:
                 logger.warning(f"No QA pairs found for project {self.project_id}")
                 return []
-                
-            qa_pairs = [QAPair(**qa) for qa in qa_doc.get("qa_pairs", [])]
+            qa_pairs = qa_doc.get("qa_pairs", [])
+            qa_pairs = qa_pairs[:1]
+            qa_pairs = [QAPair(**qa) for qa in qa_pairs]
             user_id = qa_doc.get("user_id")
             # Run tests
             results = []
             for qa in qa_pairs:
+                print(f"Running for QA: {qa.question}")
                 student_answer = await self.get_student_answer(qa)
+                print(f"Student answer: {student_answer}")
                 if student_answer:
                     hallucination = await self._run_test_for_hallucinations(qa,student_answer)
                     helpfulness = await self._run_test_for_helpfullness(qa,student_answer)
                     results.append({"question":qa.question,"student_answer":student_answer,"hallucination":hallucination,"helpfulness":helpfulness})
             self.add_results(results, user_id)
+            print(f"Results added for project {self.project_id}")
             logger.info(f"Results added for project {self.project_id}")
 
         except Exception as e:
@@ -145,27 +149,26 @@ class TestRunner:
             logger.error(f"Missing target_url or end_point for project {self.project_id}")
             return None
             
-        prepare_payload = await self.prepare_payload(str(payload_config.get("body")), user_query="Hi this is dummy query")
-        payload_config["body"] = prepare_payload
-        test_response = await trigger_payload(payload_config)
-        if test_response[0]:
-
-            final_payload = await self.prepare_payload(str(payload_config.get("body")),user_query=str(qa_pair.question))
-            payload_config["body"] = final_payload
+        try:
+            print("Payload config being sent:", payload_config)
+            prepare_payload = await self.prepare_payload(str(payload_config.get("body")), user_query=qa_pair.question)
+            payload_config["body"] = prepare_payload
             test_response = await trigger_payload(payload_config)
-
+            
             if test_response[0]:
                 student_answer = test_response[1]
             else:
+                logger.error(f"Error in trigger_payload: {test_response}")
+                print("Error response from model:", test_response[1])
                 student_answer = None
-
-        else:
-            print(f"Error in trigger_payload: {test_response}")
+                
+        except Exception as e:
+            logger.error(f"Error in get_student_answer: {str(e)}")
             student_answer = None
 
         return student_answer
     
-    async def prepare_payload(self, payload_infor, user_query="Hi this is dummy query"):
+    async def prepare_payload(self, payload_infor, user_query=None):
         # Check if payload_infor is None
         if payload_infor is None:
             logger.warning("payload_infor is None, using empty dict")
@@ -222,18 +225,20 @@ class TestRunner:
                     user_id=user_id,
                     question=result["question"],
                     student_answer=result["student_answer"],
-                    hallucination=result["hallucination"],
-                    helpfulness=result["helpfulness"],
+                    hallucination_score=result["hallucination"],
+                    helpfullness_score=result["helpfulness"],
                     last_test_conducted=datetime.utcnow(),
-                    test_status= 1 if result["hallucination"] < 0.5 and result["helpfulness"] > 0.5 else 0
+                    test_status=str(1 if result["hallucination"] < 0.5 and result["helpfulness"] > 0.5 else 0)
                 )
                 for result in results
             ]
             db.add_all(test_info_objects)
             db.commit()
+            print("Committed test_info_objects:", test_info_objects)
         except Exception as e:
             db.rollback()
             logger.error(f"Error adding test results: {str(e)}")
+            raise
         finally:
             db.close()
 
@@ -299,4 +304,4 @@ async def trigger_payload(payload_config):
 
 
 
-{'messages': [{'human': 'hey_val_ai'}]}
+# {'messages': [{'human': 'hey_val_ai'}]}
