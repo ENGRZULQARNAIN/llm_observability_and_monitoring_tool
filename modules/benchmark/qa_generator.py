@@ -24,31 +24,22 @@ class QAPrompt(BaseModel):
         default="You are an expert at generating high-quality question-answer pairs from given context. Generate concise and clear questions with accurate answers.",
     )
     
-    format_instructions: str = Field(
-        default="""The output should be formatted as a JSON object with the following structure:
-{
-    "questions": [
-        {
-            "question": "question text here",
-            "answer": "answer text here",
-            "difficulty_level": "easy/medium/hard"
-        }
-    ]
-}""",
-    )
     
     human_prompt_template: str = Field(
         default="""Given the following context, generate {num_questions} question-answer pairs:
         
-Context: {context}
+# Context: 
+{context}
 
-Requirements:
+# Requirements:
 1. Test key concepts and information from the context
 2. Have clear, unambiguous answers
 3. Cover different aspects of the context
-4. Are factual and can be verified from the context
+4. Are factual and can be verified from the context.
 
-{format_instructions}""",
+# Format the output as follows:
+{format_instructions}
+""",
     )
     
     num_questions: int = Field(default=3, ge=1, le=10)
@@ -71,9 +62,12 @@ class QAGenerator:
             temperature=0.1,
             api_key=settings.ANTHROPIC_API_KEY,
         )
-        from langchain_openai import ChatOpenAI
-        from pydantic import SecretStr
-        import os
+        self.llm.with_structured_output(
+            schema=QAResponse
+        )
+        # from langchain_openai import ChatOpenAI
+        # from pydantic import SecretStr
+        # import os
         # self.llm = ChatOpenAI(
         #         model="qwen/qwen3-235b-a22b:free",
         #         api_key=SecretStr(os.getenv("OPENROUTER_API_KEY") or ""),
@@ -85,21 +79,21 @@ class QAGenerator:
         #     )
         self.prompt_config = QAPrompt()
         self.parser = PydanticOutputParser(pydantic_object=QAResponse)
+        self.format_instruction = self.parser.get_format_instructions()
     
-    async def generate_qa(self, context: str, num_questions: int = 6) -> List[QAPair]:
+    async def generate_qa(self, context: str, num_questions: int = 3) -> List[QAPair]:
         try:
             messages = [
                 SystemMessage(content=self.prompt_config.system_prompt),
                 HumanMessage(content=self.prompt_config.human_prompt_template.format(
                     context=context,
                     num_questions=num_questions,
-                    format_instructions=self.parser.get_format_instructions()
+                    format_instructions=self.format_instruction,
                 ))
             ]
             
             response = await self.llm.ainvoke(messages)
             parsed_response = self.parser.parse(response.content)
-            
             qa_pairs = []
             for qa in parsed_response.questions:
                 db_qa = QAPair(

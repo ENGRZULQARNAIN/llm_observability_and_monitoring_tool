@@ -386,7 +386,7 @@ async def benchmark_creation_background_process(
                 
                 # Generate QA pairs for each chunk
                 chunk_qa_pairs = []
-                for chunk in chunks:
+                for chunk in chunks[:2]:
                     try:
                         qa_pairs = await qa_generator.generate_qa(
                             chunk.content
