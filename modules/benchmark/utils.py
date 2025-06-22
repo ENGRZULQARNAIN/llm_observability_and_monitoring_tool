@@ -33,9 +33,6 @@ settings = get_settings()
 llm = ChatAnthropic(
             model="claude-3-5-sonnet-latest",
             temperature=0.1,
-            max_tokens=None,
-            timeout=None,
-            max_retries=0,
             api_key=settings.ANTHROPIC_API_KEY,
         )
 

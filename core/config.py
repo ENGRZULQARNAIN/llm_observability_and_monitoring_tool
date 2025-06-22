@@ -9,7 +9,6 @@ class Settings(BaseSettings):
     # MongoDB Configuration
     MONGODB_URL: str 
     MONGODB_DB: str 
-    GEMINI_API_KEY: str
     EMAIL_PASSWORD: str
     LANGSMITH_API_KEY: str
     ANTHROPIC_API_KEY: str
