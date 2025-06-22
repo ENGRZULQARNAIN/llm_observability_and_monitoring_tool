@@ -99,7 +99,6 @@ class TestRunner:
                 logger.warning(f"No QA pairs found for project {self.project_id}")
                 return []
             qa_pairs = qa_doc.get("qa_pairs", [])
-            qa_pairs = qa_pairs[:1]
             qa_pairs = [QAPair(**qa) for qa in qa_pairs]
             user_id = qa_doc.get("user_id")
             # Run tests
@@ -111,7 +110,7 @@ class TestRunner:
                 if student_answer:
                     hallucination = await self._run_test_for_hallucinations(qa,student_answer)
                     helpfulness = await self._run_test_for_helpfullness(qa,student_answer)
-                    results.append({"question":qa.question,"student_answer":student_answer,"hallucination":hallucination,"helpfulness":helpfulness})
+                    results.append({"question":qa.question,"student_answer":student_answer,"hallucination":hallucination,"helpfulness":helpfulness,"difficulty_level":qa.difficulty_level})
             self.add_results(results, user_id)
             print(f"Results added for project {self.project_id}")
             logger.info(f"Results added for project {self.project_id}")
@@ -235,6 +234,7 @@ class TestRunner:
                     helpfullness_score=result["helpfulness"],
                     last_test_conducted=datetime.utcnow(),
                     test_status=str(1 if result["hallucination"] < 0.5 and result["helpfulness"] > 0.5 else 0)
+                    difficulty_level = result["difficulty_level"]
                 )
                 for result in results
             ]
