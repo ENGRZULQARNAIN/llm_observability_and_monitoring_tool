@@ -577,6 +577,7 @@ async def get_project_status(
     return JSONResponse(content=status_doc)
 
 
+
 @router.get(
     "/qa_data/{project_id}",
     summary="Get paginated QA pairs for a project",
@@ -686,3 +687,72 @@ async def get_qa_pairs_paginated(
             }
         }
     )
+
+
+@router.get("/get-dashboard-data/{project_id}")
+async def get_dash_board_data(
+    project_id: str,
+    db: Session = Depends(get_db)):
+    """
+    Returns dashboard data for a given project_id.
+    { 
+      "data":{
+        "last_run": ...,  # latest test time for project_id from test_info
+        "bench_mark_data_title": ...,  # project name from projects table
+        "avg_hallucination_score": ...,  # see logic below
+        "avg_helpfulness": ...  # see logic below
+      }
+    }
+    """
+    from modules.monitor.models import TestInfo
+    from modules.project_connections.models import Projects
+    from sqlalchemy import desc
+
+    # Get project info
+    project = db.query(Projects).filter(Projects.project_id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Get all test_info records for this project
+    test_records = db.query(TestInfo).filter(TestInfo.project_id == project_id).order_by(desc(TestInfo.last_test_conducted)).all()
+
+    # last_run: latest test time
+    last_run = test_records[0].last_test_conducted.isoformat() if test_records else None
+
+    # bench_mark_data_title: project name
+    bench_mark_data_title = project.project_name
+
+    # avg_hallucination_score: 0 means hallucination, 1 means no hallucination
+    # If hallucination_score is 0, add 1 to hallucination count (means hallucination occurred)
+    # If hallucination_score is 1, add 0 (means no hallucination)
+    hallucination_sum = 0
+    hallucination_count = 0
+    for t in test_records:
+        if t.hallucination_score is not None:
+            if t.hallucination_score == 0:
+                hallucination_sum += 1
+            # else: add 0
+            hallucination_count += 1
+    avg_hallucination_score = (hallucination_sum / hallucination_count) if hallucination_count > 0 else None
+
+    # avg_helpfulness: if 0 means not helpful, add 0; if 1 or other, add that value
+    helpfulness_sum = 0
+    helpfulness_count = 0
+    for t in test_records:
+        if t.helpfullness_score is not None:
+            if t.helpfullness_score == 0:
+                helpfulness_sum += 0
+            else:
+                helpfulness_sum += t.helpfullness_score
+            helpfulness_count += 1
+    avg_helpfulness = (helpfulness_sum / helpfulness_count) if helpfulness_count > 0 else None
+
+    return JSONResponse(content={
+        "data": {
+            "last_run": last_run,
+            "bench_mark_data_title": bench_mark_data_title,
+            "avg_hallucination_score": avg_hallucination_score,
+            "avg_helpfulness": avg_helpfulness
+        }
+    })
+    
