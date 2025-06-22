@@ -86,7 +86,7 @@ class QAGenerator:
         self.prompt_config = QAPrompt()
         self.parser = PydanticOutputParser(pydantic_object=QAResponse)
     
-    async def generate_qa(self, context: str, num_questions: int = 6) -> List[QAPair]:
+    async def generate_qa(self, context: str, num_questions: int = 3) -> List[QAPair]:
         try:
             messages = [
                 SystemMessage(content=self.prompt_config.system_prompt),
