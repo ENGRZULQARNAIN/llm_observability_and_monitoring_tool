@@ -3,6 +3,7 @@ from typing import List
 from langchain.output_parsers import PydanticOutputParser
 from langchain_core.messages import SystemMessage, HumanMessage
 from modules.benchmark.qa_pair import QAPair
+from langchain_anthropic import ChatAnthropic
 from datetime import datetime
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.output_parsers import PydanticOutputParser
@@ -57,13 +58,21 @@ class QAGenerator:
     def __init__(self, settings: Settings, db: AsyncIOMotorClient):
         self.db = db
         self.qa_collection = self.db.qa_collection
-        self.llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash",
-            temperature=0,
+        # self.llm = ChatGoogleGenerativeAI(
+        #     model="gemini-2.5-flash",
+        #     temperature=0,
+        #     max_tokens=None,
+        #     timeout=None,
+        #     max_retries=0,
+        #     api_key=settings.GEMINI_API_KEY,
+        # )
+        self.llm = ChatAnthropic(
+            model="claude-3-5-sonnet-latest",
+            temperature=0.1,
             max_tokens=None,
             timeout=None,
             max_retries=0,
-            api_key=settings.GEMINI_API_KEY,
+            api_key=settings.ANTHROPIC_API_KEY,
         )
         from langchain_openai import ChatOpenAI
         from pydantic import SecretStr

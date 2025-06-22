@@ -4,6 +4,7 @@ from core.database import SessionLocal, get_mongodb
 from datetime import datetime
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.output_parsers import PydanticOutputParser
+from langchain_anthropic import ChatAnthropic
 from motor.motor_asyncio import AsyncIOMotorClient
 from core.config import Settings, get_settings
 from langchain_core.messages import SystemMessage, HumanMessage
@@ -20,15 +21,23 @@ from typing import Dict, Any, List, Union, Optional
 
 settings = get_settings()
 
-llm = ChatGoogleGenerativeAI(
-            model="gemini-2.0-flash-exp",
-            temperature=0.2,
+# llm = ChatGoogleGenerativeAI(
+#             model="gemini-2.0-flash-exp",
+#             temperature=0.2,
+#             max_tokens=None,
+#             timeout=None,
+#             max_retries=0,
+#             api_key=settings.GEMINI_API_KEY,
+#         )
+
+llm = ChatAnthropic(
+            model="claude-3-5-sonnet-latest",
+            temperature=0.1,
             max_tokens=None,
             timeout=None,
             max_retries=0,
-            api_key=settings.GEMINI_API_KEY,
+            api_key=settings.ANTHROPIC_API_KEY,
         )
-
 
 from core.config import get_settings
 settings = get_settings()

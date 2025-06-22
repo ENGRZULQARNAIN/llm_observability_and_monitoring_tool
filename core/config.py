@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str
     EMAIL_PASSWORD: str
     LANGSMITH_API_KEY: str
-    GOOGLE_API_KEY: str
+    ANTHROPIC_API_KEY: str
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
