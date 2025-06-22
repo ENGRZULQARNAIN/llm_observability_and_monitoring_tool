@@ -87,7 +87,7 @@ class QAGenerator:
                 db_qa = QAPair(
                     question=qa.question,
                     answer=qa.answer,
-                    defficulty_level=qa.difficulty_level
+                    difficulty_level=qa.difficulty_level
                 )
                 qa_pairs.append(db_qa)  # Store in list instead of inserting into DB
 
