@@ -3,6 +3,7 @@ from fastapi import (
     APIRouter, UploadFile, File, Depends, HTTPException, 
     BackgroundTasks, Form, status
 )
+from modules.monitor.models import TestInfo
 from sqlalchemy.orm import Session
 from modules.project_connections.models import Projects
 from modules.project_connections.schemas import ProjectCreate
@@ -581,99 +582,118 @@ async def get_project_status(
 @router.get(
     "/qa_data/{project_id}",
     summary="Get paginated QA pairs for a project",
-    description="Get QA pairs with pagination support"
+    description="Get QA pairs with pagination support from SQLite database"
 )
 async def get_qa_pairs_paginated(
     project_id: str,
     page: int = 1,
-    page_size: int = 5,
-    db: Session = Depends(get_db),
-    mongo_db: AsyncIOMotorClient = Depends(get_mongodb)
+    page_size: int = 10,
+    db: Session = Depends(get_db)
 ):
     """
-    Get paginated QA pairs for a benchmark project.
+    Get paginated QA pairs for a benchmark project from SQLite database.
     
     Args:
         project_id: Project ID to get QA pairs for
         page: Page number (starts from 1)
         page_size: Number of QA pairs per page (default: 10, max: 100)
-        db: SQL database session
-        mongo_db: MongoDB connection
+        db: SQLite database session
         
     Returns:
         JSON response with paginated QA pairs and metadata
-    """
-    # Validate pagination parameters
-    if page < 1:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Page number must be greater than 0"
-        )
-    
-    if page_size < 1 or page_size > 100:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Page size must be between 1 and 100"
-        )
-    
-    # Get project to verify it exists (optional - uncomment if needed)
-    # project = db.query(Projects).filter(
-    #     Projects.project_id == project_id
-    # ).first()
-    # 
-    # if not project:
-    #     raise HTTPException(
-    #         status_code=status.HTTP_404_NOT_FOUND,
-    #         detail="Project not found"
-    #     )
-    
-    # Get QA pairs from MongoDB
-    qa_doc = await mongo_db.qa_collection.find_one(
-        {"project_id": project_id}
-    )
-    
-    if not qa_doc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="QA pairs not found for this project"
-        )
-    
-    # Get all QA pairs and convert datetime objects to strings
-    all_qa_pairs = qa_doc.get("qa_pairs", [])
-    total_qa_pairs = len(all_qa_pairs)
-    
-    # Calculate pagination
-    start_index = (page - 1) * page_size
-    end_index = start_index + page_size
-    
-    # Check if page is out of range
-    if start_index >= total_qa_pairs and total_qa_pairs > 0:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Page {page} not found. Total pages available: {(total_qa_pairs + page_size - 1) // page_size}"
-        )
-    
-    # Get paginated QA pairs
-    paginated_qa_pairs = all_qa_pairs[start_index:end_index]
-    serializable_qa_pairs = []
-    
-    for qa_pair in paginated_qa_pairs:
-        # Create a copy of the QA pair that we can modify
-        serializable_pair = dict(qa_pair)
         
-        # Convert datetime to string if present
-        if "generated_at" in serializable_pair and isinstance(serializable_pair["generated_at"], datetime):
-            serializable_pair["generated_at"] = serializable_pair["generated_at"].isoformat()
-            
-        serializable_qa_pairs.append(serializable_pair)
-    
-    # Calculate pagination metadata
-    total_pages = (total_qa_pairs + page_size - 1) // page_size
-    has_next = page < total_pages
-    has_previous = page > 1
-    
-    return JSONResponse(
-        content={
+    Raises:
+        HTTPException: For validation errors, not found errors, etc.
+    """
+    try:
+        # Validate pagination parameters
+        if page < 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Page number must be greater than 0"
+            )
+        
+        if page_size < 1 or page_size > 100:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Page size must be between 1 and 100"
+            )
+        
+        # Validate project_id is not empty
+        if not project_id or not project_id.strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Project ID cannot be empty"
+            )
+        
+        # Get total count of QA pairs for the project
+        try:
+            total_qa_pairs = db.query(TestInfo).filter(
+                TestInfo.project_id == project_id
+            ).count()
+        except Exception as e:
+            logger.error(f"Error counting QA pairs for project {project_id}: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to retrieve QA pairs count"
+            )
+        
+        # Check if project has any QA pairs
+        if total_qa_pairs == 0:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No QA pairs found for this project"
+            )
+        
+        # Calculate pagination metadata
+        total_pages = (total_qa_pairs + page_size - 1) // page_size
+        
+        # Check if page is out of range
+        if page > total_pages:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Page {page} not found. Total pages available: {total_pages}"
+            )
+        
+        # Calculate offset for pagination
+        offset = (page - 1) * page_size
+        
+        # Get paginated QA pairs from database
+        try:
+            qa_pairs_query = db.query(TestInfo).filter(
+                TestInfo.project_id == project_id
+            ).offset(offset).limit(page_size).all()
+        except Exception as e:
+            logger.error(f"Error fetching QA pairs for project {project_id}: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to retrieve QA pairs"
+            )
+        
+        # Convert database records to serializable format
+        serializable_qa_pairs = []
+        try:
+            for qa_record in qa_pairs_query:
+                qa_pair = {
+                    "question": qa_record.question,
+                    "student_answer": qa_record.student_answer,
+                    "difficulty_level": qa_record.difficulty_level,
+                    "factual_answer": qa_record.factual_answer
+                }
+                serializable_qa_pairs.append(qa_pair)
+        except Exception as e:
+            logger.error(f"Error serializing QA pairs: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to process QA pairs data"
+            )
+        
+        # Calculate pagination flags
+        has_next = page < total_pages
+        has_previous = page > 1
+        
+        # Prepare response data
+        response_data = {
             "qa_pairs": serializable_qa_pairs,
             "pagination": {
                 "current_page": page,
@@ -686,7 +706,22 @@ async def get_qa_pairs_paginated(
                 "previous_page": page - 1 if has_previous else None
             }
         }
-    )
+        
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content=response_data
+        )
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions as they are
+        raise
+    except Exception as e:
+        # Log unexpected errors and return generic error response
+        logger.error(f"Unexpected error in get_qa_pairs_paginated: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred while processing your request"
+        )
 
 
 @router.get("/get-dashboard-data/{project_id}")
