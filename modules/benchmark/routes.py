@@ -579,30 +579,47 @@ async def get_project_status(
 
 @router.get(
     "/qa_data/{project_id}",
-    summary="Download QA pairs for a project",
-    description="Download the generated QA pairs as a JSON file"
+    summary="Get paginated QA pairs for a project",
+    description="Get QA pairs with pagination support"
 )
-async def download_qa_pairs(
+async def get_qa_pairs_paginated(
     project_id: str,
+    page: int = 1,
+    page_size: int = 5,
     db: Session = Depends(get_db),
     mongo_db: AsyncIOMotorClient = Depends(get_mongodb)
 ):
     """
-    Download QA pairs for a benchmark project.
+    Get paginated QA pairs for a benchmark project.
     
     Args:
-        project_id: Project ID to download
+        project_id: Project ID to get QA pairs for
+        page: Page number (starts from 1)
+        page_size: Number of QA pairs per page (default: 10, max: 100)
         db: SQL database session
         mongo_db: MongoDB connection
         
     Returns:
-        JSON file with QA pairs
+        JSON response with paginated QA pairs and metadata
     """
-    # Get project
+    # Validate pagination parameters
+    if page < 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Page number must be greater than 0"
+        )
+    
+    if page_size < 1 or page_size > 100:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Page size must be between 1 and 100"
+        )
+    
+    # Get project to verify it exists (optional - uncomment if needed)
     # project = db.query(Projects).filter(
     #     Projects.project_id == project_id
     # ).first()
-    
+    # 
     # if not project:
     #     raise HTTPException(
     #         status_code=status.HTTP_404_NOT_FOUND,
@@ -613,7 +630,6 @@ async def download_qa_pairs(
     qa_doc = await mongo_db.qa_collection.find_one(
         {"project_id": project_id}
     )
-
     
     if not qa_doc:
         raise HTTPException(
@@ -621,12 +637,26 @@ async def download_qa_pairs(
             detail="QA pairs not found for this project"
         )
     
+    # Get all QA pairs and convert datetime objects to strings
+    all_qa_pairs = qa_doc.get("qa_pairs", [])
+    total_qa_pairs = len(all_qa_pairs)
     
-    # Get QA pairs and convert datetime objects to strings
-    qa_pairs = qa_doc.get("qa_pairs", [])
+    # Calculate pagination
+    start_index = (page - 1) * page_size
+    end_index = start_index + page_size
+    
+    # Check if page is out of range
+    if start_index >= total_qa_pairs and total_qa_pairs > 0:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Page {page} not found. Total pages available: {(total_qa_pairs + page_size - 1) // page_size}"
+        )
+    
+    # Get paginated QA pairs
+    paginated_qa_pairs = all_qa_pairs[start_index:end_index]
     serializable_qa_pairs = []
     
-    for qa_pair in qa_pairs:
+    for qa_pair in paginated_qa_pairs:
         # Create a copy of the QA pair that we can modify
         serializable_pair = dict(qa_pair)
         
@@ -636,11 +666,23 @@ async def download_qa_pairs(
             
         serializable_qa_pairs.append(serializable_pair)
     
-    num_qa_pairs = len(serializable_qa_pairs)
+    # Calculate pagination metadata
+    total_pages = (total_qa_pairs + page_size - 1) // page_size
+    has_next = page < total_pages
+    has_previous = page > 1
     
     return JSONResponse(
         content={
-        "qa": serializable_qa_pairs,
-        "num_qa_pairs": num_qa_pairs,
+            "qa_pairs": serializable_qa_pairs,
+            "pagination": {
+                "current_page": page,
+                "page_size": page_size,
+                "total_qa_pairs": total_qa_pairs,
+                "total_pages": total_pages,
+                "has_next": has_next,
+                "has_previous": has_previous,
+                "next_page": page + 1 if has_next else None,
+                "previous_page": page - 1 if has_previous else None
+            }
         }
     )
