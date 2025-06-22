@@ -20,3 +20,4 @@ class TestInfo(Base):
     last_test_conducted = Column(DateTime, default=datetime.utcnow)
     question = Column(String, nullable=False)
     student_answer = Column(String, nullable=False)
+    difficulty_level = Column(String, nullable=False)
