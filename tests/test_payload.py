@@ -3,7 +3,7 @@ import os
 import sys
 import pytest
 from unittest.mock import patch, MagicMock
-
+from langchain_anthropic import ChatAnthropic
 # Add the root directory to the Python path to import modules properly
 parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, parent_dir)
@@ -152,13 +152,22 @@ prompt_payload_planner = client.pull_prompt("zulqarnain/payload_planner")
 prompt_helpfullness = client.pull_prompt("helpfullness_prompt_obseravbility")
 prompt_hallucinations = client.pull_prompt("hallucinations_testing")
 
-llm = ChatGoogleGenerativeAI(
-            model="gemini-2.0-flash-exp",
-            temperature=0.2,
+# llm = ChatGoogleGenerativeAI(
+#             model="gemini-2.0-flash-exp",
+#             temperature=0.2,
+#             max_tokens=None,
+#             timeout=None,
+#             max_retries=0,
+#             api_key=settings.GEMINI_API_KEY,
+#         )
+
+llm = ChatAnthropic(
+            model="claude-3-5-sonnet-latest",
+            temperature=0.1,
             max_tokens=None,
             timeout=None,
             max_retries=0,
-            api_key=settings.GEMINI_API_KEY,
+            api_key=settings.ANTHROPIC_API_KEY,
         )
 
 payload_planner = prompt_payload_planner | llm

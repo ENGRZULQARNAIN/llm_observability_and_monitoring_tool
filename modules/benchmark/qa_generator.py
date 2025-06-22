@@ -3,6 +3,7 @@ from typing import List
 from langchain.output_parsers import PydanticOutputParser
 from langchain_core.messages import SystemMessage, HumanMessage
 from modules.benchmark.qa_pair import QAPair
+from langchain_anthropic import ChatAnthropic
 from datetime import datetime
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.output_parsers import PydanticOutputParser
@@ -57,18 +58,38 @@ class QAGenerator:
     def __init__(self, settings: Settings, db: AsyncIOMotorClient):
         self.db = db
         self.qa_collection = self.db.qa_collection
-        self.llm = ChatGoogleGenerativeAI(
-            model="gemini-2.0-flash-exp",
-            temperature=0,
+        # self.llm = ChatGoogleGenerativeAI(
+        #     model="gemini-2.5-flash",
+        #     temperature=0,
+        #     max_tokens=None,
+        #     timeout=None,
+        #     max_retries=0,
+        #     api_key=settings.GEMINI_API_KEY,
+        # )
+        self.llm = ChatAnthropic(
+            model="claude-3-5-sonnet-latest",
+            temperature=0.1,
             max_tokens=None,
             timeout=None,
             max_retries=0,
-            api_key=settings.GEMINI_API_KEY,
+            api_key=settings.ANTHROPIC_API_KEY,
         )
+        from langchain_openai import ChatOpenAI
+        from pydantic import SecretStr
+        import os
+        # self.llm = ChatOpenAI(
+        #         model="qwen/qwen3-235b-a22b:free",
+        #         api_key=SecretStr(os.getenv("OPENROUTER_API_KEY") or ""),
+        #         base_url=os.getenv("OPENROUTER_BASE_URL"),
+        #         temperature=0.1,
+        #         streaming=False,
+        #         max_retries=2,
+        #         timeout=30
+        #     )
         self.prompt_config = QAPrompt()
         self.parser = PydanticOutputParser(pydantic_object=QAResponse)
     
-    async def generate_qa(self, context: str, num_questions: int = 3) -> List[QAPair]:
+    async def generate_qa(self, context: str, num_questions: int = 6) -> List[QAPair]:
         try:
             messages = [
                 SystemMessage(content=self.prompt_config.system_prompt),
@@ -87,7 +108,7 @@ class QAGenerator:
                 db_qa = QAPair(
                     question=qa.question,
                     answer=qa.answer,
-                    defficulty_level=qa.difficulty_level
+                    difficulty_level=qa.difficulty_level
                 )
                 qa_pairs.append(db_qa)  # Store in list instead of inserting into DB
 

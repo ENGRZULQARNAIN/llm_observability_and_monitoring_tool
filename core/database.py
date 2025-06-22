@@ -30,9 +30,7 @@ async def get_mongodb(settings=None):
     if settings is None:
         from core.config import get_settings
         settings = get_settings()
-    print(f"MongoDB URL: {settings.MONGODB_URL}")
-    print(f"MongoDB DB: {settings.MONGODB_DB}")
-    client = AsyncIOMotorClient("mongodb://localhost:27017")
+    client = AsyncIOMotorClient(settings.MONGODB_URL)
     db = client[settings.MONGODB_DB]
     return db
     # return AsyncIOMotorClient(settings.MONGODB_URL)[settings.MONGODB_DB]
