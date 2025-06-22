@@ -58,17 +58,29 @@ class QAGenerator:
         self.db = db
         self.qa_collection = self.db.qa_collection
         self.llm = ChatGoogleGenerativeAI(
-            model="gemini-2.0-flash-exp",
+            model="gemini-2.5-flash",
             temperature=0,
             max_tokens=None,
             timeout=None,
             max_retries=0,
             api_key=settings.GEMINI_API_KEY,
         )
+        from langchain_openai import ChatOpenAI
+        from pydantic import SecretStr
+        import os
+        # self.llm = ChatOpenAI(
+        #         model="qwen/qwen3-235b-a22b:free",
+        #         api_key=SecretStr(os.getenv("OPENROUTER_API_KEY") or ""),
+        #         base_url=os.getenv("OPENROUTER_BASE_URL"),
+        #         temperature=0.1,
+        #         streaming=False,
+        #         max_retries=2,
+        #         timeout=30
+        #     )
         self.prompt_config = QAPrompt()
         self.parser = PydanticOutputParser(pydantic_object=QAResponse)
     
-    async def generate_qa(self, context: str, num_questions: int = 3) -> List[QAPair]:
+    async def generate_qa(self, context: str, num_questions: int = 6) -> List[QAPair]:
         try:
             messages = [
                 SystemMessage(content=self.prompt_config.system_prompt),
