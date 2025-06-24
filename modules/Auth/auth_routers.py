@@ -333,3 +333,23 @@ def update_user_name(user_id: str, new_name: str, db: Session = Depends(get_db))
         db.close()
 
 
+@router.post("/all-users")
+def get_all_users(db: Session = Depends(get_db)):
+    """
+    Get all users in the required format.
+    Returns:
+        dict: {"status": "ok", "users": [user_dicts]}
+    """
+    users = db.query(Users).all()
+    users_list = []
+    for user in users:
+        users_list.append({
+            "user_id": user.user_id,
+            "name": user.name,
+            "email": user.email,
+            "isVerified": user.isVerified,
+            "registered_at": user.registered_at.isoformat() if user.registered_at else None
+        })
+    return {"status": "ok", "users": users_list}
+
+
