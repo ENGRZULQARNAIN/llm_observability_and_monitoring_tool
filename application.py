@@ -123,7 +123,7 @@ application.add_middleware(
 
 @application.get("/")
 async def read_items():
-    return {"message":"OBAM AI: v0.2.4"}
+    return {"message":"OBAM AI: v0.2.5"}
 
 @application.post("/api/v1/trigger-monitor")
 async def trigger_monitor(background_tasks: BackgroundTasks):

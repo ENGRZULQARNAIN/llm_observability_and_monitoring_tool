@@ -32,7 +32,7 @@ settings = get_settings()
 
 llm = ChatAnthropic(
             model="claude-3-5-sonnet-latest",
-            temperature=0.1,
+            temperature=0.5,
             api_key=settings.ANTHROPIC_API_KEY,
         )
 
@@ -94,7 +94,7 @@ class TestRunner:
             
             
             # Fetch QA pairs
-            qa_doc = await self.test_collection.find_one({"project_id": self.project_id})
+            qa_doc = await self.qa_collection.find_one({"project_id": self.project_id})
             if not qa_doc:
                 logger.warning(f"No QA pairs found for project {self.project_id}")
                 return []
@@ -157,6 +157,7 @@ class TestRunner:
         try:
             print("Payload config being sent:", payload_config)
             prepare_payload = await self.prepare_payload(str(payload_config.get("body")), user_query=qa_pair.question)
+            logger.info(f"final prepared payload: {prepare_payload}")
             payload_config["body"] = prepare_payload
             test_response = await trigger_payload(payload_config)
             
@@ -178,17 +179,17 @@ class TestRunner:
         if payload_infor is None:
             logger.warning("payload_infor is None, using empty dict")
             return {}
-            
+        logger.info(f"Calling payload_planner_chain with: user_query={user_query}, payload_infor={payload_infor}")  
         ans = payload_planner_chain.invoke({"question": f"user query: {user_query}, payload: "
                 f"{payload_infor}"
         })
-        
+        logger.info(f"Received from payload_planner_chain: {ans}")
         # Check if ans is properly returned
-        if not ans or not isinstance(ans, list) or not ans[0] or not isinstance(ans[0], dict):
+        if not ans:
             logger.warning("Invalid response from payload_planner_chain")
             return {}
             
-        final_payload = ans[0].get("args", {}).get("final_payload")
+        final_payload = ans.get("final_payload")
         
         # Check if final_payload exists
         if final_payload is None:
@@ -214,11 +215,11 @@ class TestRunner:
 
     async def _run_test_for_hallucinations(self, qa_pair=None,student_answer=None):
         hallucination = hallucinations_chain.invoke({"question":qa_pair.question,"facts":qa_pair.answer,"answer":student_answer,})
-        return hallucination[0].get("args").get("hallucination")
+        return hallucination.get("hallucination")
 
     async def _run_test_for_helpfullness(self, qa_pair=None,student_answer=None):
         helpfulness = helpfullness_chain.invoke({"question": qa_pair.question,"student_answer": student_answer})
-        return helpfulness[0].get("args").get("Helpful")
+        return helpfulness.get("Helpful")
     
     def add_results(self, results, user_id):
         db = SessionLocal()
