@@ -675,10 +675,10 @@ async def get_qa_pairs_paginated(
         try:
             for qa_record in qa_pairs_query:
                 qa_pair = {
-                    "question": qa_record.question,
-                    "student_answer": qa_record.student_answer,
+                    "question": qa_record.question.decode("utf-8") if isinstance(qa_record.question, bytes) else qa_record.question,
+                    "student_answer": qa_record.student_answer.decode("utf-8") if isinstance(qa_record.student_answer, bytes) else qa_record.student_answer,
                     "difficulty_level": qa_record.difficulty_level,
-                    "factual_answer": qa_record.factual_answer
+                    "factual_answer": qa_record.factual_answer.decode("utf-8") if isinstance(qa_record.factual_answer, bytes) else qa_record.factual_answer
                 }
                 serializable_qa_pairs.append(qa_pair)
         except Exception as e:
@@ -786,7 +786,7 @@ async def get_dash_board_data(
         "data": {
             "last_run": last_run,
             "bench_mark_data_title": bench_mark_data_title,
-            "avg_hallucination_score": avg_hallucination_score,
+            "avg_hallucination_score": round(avg_hallucination_score, 4) if avg_hallucination_score is not None else None,
             "avg_helpfulness": avg_helpfulness
         }
     })
